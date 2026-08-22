@@ -6,6 +6,7 @@ import {
   getActivePassesForOfflineCache,
   getDefaultEvent,
 } from '@/lib/db/store';
+import { checkRateLimit } from '@/lib/security/rateLimiter';
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,6 +24,15 @@ export async function GET(req: NextRequest) {
 
     // Phone recovery request
     if (recoverPhone) {
+      const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
+      const rateLimit = checkRateLimit(`recover_${ip}`, 15, 60000); // 15 phone searches per minute
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          { success: false, message: 'تم تجاوز عدد محاولات البحث المسموح بها مؤقتاً.' },
+          { status: 429 }
+        );
+      }
+
       const event = await getDefaultEvent();
       const result = await recoverGuestPassByPhone(event.id, recoverPhone);
       return NextResponse.json(result);
@@ -50,6 +60,15 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
+    const rateLimit = checkRateLimit(`join_${ip}`, 20, 60000); // 20 registrations per minute per IP
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, message: 'تم تجاوز عدد طلبات التسجيل المسموح بها مؤقتاً. يرجى الانتظار قليلاً.' },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const { slug, guestName, guestPhone, seatsCount, notes } = body;
 

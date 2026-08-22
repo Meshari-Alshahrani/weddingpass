@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeCheckIn, searchParties, getDefaultEvent } from '@/lib/db/store';
+import { checkRateLimit } from '@/lib/security/rateLimiter';
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
+    const rateLimit = checkRateLimit(`checkin_${ip}`, 120, 60000); // 120 requests/minute per IP
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, code: 'RATE_LIMIT_EXCEEDED', message: 'تم تجاوز الحد المسموح للطلبات. يرجى الانتظار قليلاً.' },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const { token, passToken, stationName, operatorName, checkinType, overrideCount, gateSection, forceCrossSection } = body;
 
