@@ -262,13 +262,45 @@ function seedDemoData(db: DatabaseStore) {
 // ------------------------------------------------------------------------------
 
 export async function getDefaultEvent(): Promise<WeddingEvent> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    try {
+      const { data } = await supabaseAdmin.from('events').select('*').limit(1).single();
+      if (data) return data as WeddingEvent;
+    } catch (err) {
+      console.warn('Supabase getDefaultEvent fallback:', err);
+    }
+  }
   const db = getDatabaseStore();
   return Array.from(db.events.values())[0];
 }
 
 export async function getPartyByInvitationToken(rawToken: string): Promise<{ party: Party; event: WeddingEvent; entryPass?: EntryPass } | null> {
-  const db = getDatabaseStore();
   const trimmed = rawToken.trim();
+  const tokenHash = await hashToken(trimmed);
+
+  if (isSupabaseConfigured && supabaseAdmin) {
+    try {
+      const { data: party, error } = await supabaseAdmin
+        .from('parties')
+        .select('*, entry_passes(*), events(*)')
+        .eq('invitation_token_hash', tokenHash)
+        .single();
+
+      if (!error && party) {
+        if (party.rsvp_status === 'unopened') {
+          await supabaseAdmin.from('parties').update({ rsvp_status: 'viewed', updated_at: new Date().toISOString() }).eq('id', party.id);
+          party.rsvp_status = 'viewed';
+        }
+        const event = (party.events as any) || (await getDefaultEvent());
+        const entryPass = Array.isArray(party.entry_passes) ? party.entry_passes[0] : party.entry_passes;
+        return { party: party as Party, event: event as WeddingEvent, entryPass };
+      }
+    } catch (err) {
+      console.warn('Supabase getPartyByInvitationToken fallback:', err);
+    }
+  }
+
+  const db = getDatabaseStore();
   const partyId = db.tokenToPartyMap.get(trimmed);
   if (!partyId) return null;
 
@@ -921,13 +953,28 @@ export async function executeCheckIn(
 }
 
 export async function getAllParties(eventId: string): Promise<Party[]> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('parties')
+        .select('*, entry_passes(*)')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        return data as Party[];
+      }
+    } catch (err) {
+      console.warn('Supabase getAllParties fallback:', err);
+    }
+  }
   const db = getDatabaseStore();
   return Array.from(db.parties.values()).filter((p) => p.event_id === eventId);
 }
 
 export async function bulkAddParties(
   eventId: string,
-  rawGuests: Array<{ party_name: string; primary_phone?: string; allowed_count?: number; section?: string; host_name?: string; table_number?: string; wheelchair?: boolean; notes?: string }>
+  rawGuests: Array<{ party_name: string; primary_phone?: string; allowed_count?: number; section?: string; host_name?: string; table_number?: string; wheelchair?: boolean; is_vip?: boolean; notes?: string }>
 ): Promise<{ addedCount: number; parties: Party[] }> {
   const db = getDatabaseStore();
   const newParties: Party[] = [];
@@ -950,6 +997,7 @@ export async function bulkAddParties(
       actual_checked_in_count: 0,
       table_number: raw.table_number ? raw.table_number.trim() : null,
       needs_wheelchair: Boolean(raw.wheelchair),
+      is_vip: Boolean(raw.is_vip),
       invitation_token_hash: invHash,
       raw_invitation_token: rawInvToken,
       dispatch_status: 'draft',
@@ -960,6 +1008,31 @@ export async function bulkAddParties(
       updated_at: new Date().toISOString(),
     };
 
+    if (isSupabaseConfigured && supabaseAdmin) {
+      try {
+        await supabaseAdmin.from('parties').insert({
+          id: party.id,
+          event_id: party.event_id,
+          host_name: party.host_name,
+          party_name: party.party_name,
+          primary_phone: party.primary_phone,
+          allowed_count: party.allowed_count,
+          confirmed_count: 0,
+          actual_checked_in_count: 0,
+          table_number: party.table_number,
+          needs_wheelchair: party.needs_wheelchair,
+          is_vip: party.is_vip,
+          invitation_token_hash: party.invitation_token_hash,
+          dispatch_status: 'draft',
+          rsvp_status: 'unopened',
+          section: party.section,
+          notes: party.notes,
+        });
+      } catch (err) {
+        console.warn('Supabase bulk insert fallback:', err);
+      }
+    }
+
     db.parties.set(partyId, party);
     db.tokenToPartyMap.set(rawInvToken, partyId);
     newParties.push(party);
@@ -969,6 +1042,13 @@ export async function bulkAddParties(
 }
 
 export async function updatePartyDispatch(partyId: string, status: DispatchStatus): Promise<void> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    try {
+      await supabaseAdmin.from('parties').update({ dispatch_status: status, updated_at: new Date().toISOString() }).eq('id', partyId);
+    } catch (err) {
+      console.warn('Supabase updatePartyDispatch fallback:', err);
+    }
+  }
   const db = getDatabaseStore();
   const party = db.parties.get(partyId);
   if (party) {
@@ -978,6 +1058,17 @@ export async function updatePartyDispatch(partyId: string, status: DispatchStatu
 }
 
 export async function revokePass(partyId: string): Promise<boolean> {
+  if (isSupabaseConfigured && supabaseAdmin) {
+    try {
+      const { error } = await supabaseAdmin
+        .from('entry_passes')
+        .update({ status: 'revoked', revoked_at: new Date().toISOString() })
+        .eq('party_id', partyId);
+      if (!error) return true;
+    } catch (err) {
+      console.warn('Supabase revokePass fallback:', err);
+    }
+  }
   const db = getDatabaseStore();
   const pass = db.entryPasses.get(partyId);
   if (pass) {

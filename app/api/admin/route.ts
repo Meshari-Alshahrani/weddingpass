@@ -12,10 +12,8 @@ import {
   getAllGroupLinks,
   createGroupLink,
   getWishes,
-  addWish,
   toggleWishApproval,
   getMoments,
-  addMoment,
   toggleMomentApproval,
   deleteMoment,
   updatePartyTableNumber,
@@ -68,41 +66,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
-    const { action } = body;
-
-    const event = await getDefaultEvent();
-
-    // Public Guest Actions: Adding a moment or wish with quarantine
-    if (action === 'add_moment') {
-      const { uploaderName, mediaUrl, caption, section, uploaderPhone } = body;
-      if (!mediaUrl) {
-        return NextResponse.json({ success: false, message: 'يرجى تقديم رابط أو ملف الصورة' }, { status: 400 });
-      }
-
-      const moment = await addMoment(
-        event.id,
-        uploaderName || 'ضيف كريم',
-        mediaUrl,
-        caption,
-        section || 'men',
-        uploaderPhone
-      );
-
-      return NextResponse.json({ success: true, moment, message: 'تم إرسال الصورة للمراجعة والاعتماد بنجاح' });
-    }
-
-    if (action === 'add_wish') {
-      const { partyName, message, partyId } = body;
-      if (!message || !partyName) {
-        return NextResponse.json({ success: false, message: 'بيانات التهنئة غير مكتملة' }, { status: 400 });
-      }
-
-      const wish = await addWish(event.id, partyName, message, partyId, true);
-      return NextResponse.json({ success: true, wish, message: 'تم إرسال التهنئة بنجاح' });
-    }
-
-    // Privileged Administrative Actions: Require Valid Admin Session
+    // Mandatory Admin Session Enforcement for ALL Admin Mutations
     const adminSession = await getVerifiedAdminSession(req);
     if (!adminSession) {
       return NextResponse.json(
@@ -110,6 +74,10 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    const body = await req.json();
+    const { action } = body;
+    const event = await getDefaultEvent();
 
     if (action === 'toggle_moment_approval') {
       const { momentId, isApproved } = body;

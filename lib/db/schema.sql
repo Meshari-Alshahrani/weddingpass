@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS public.parties (
     actual_checked_in_count INT DEFAULT 0,
     table_number TEXT,
     needs_wheelchair BOOLEAN DEFAULT false,
+    is_vip BOOLEAN DEFAULT false,
     invitation_token_hash TEXT UNIQUE NOT NULL,
     dispatch_status TEXT NOT NULL DEFAULT 'draft' CHECK (dispatch_status IN ('draft', 'whatsapp_opened', 'sent')),
     rsvp_status TEXT NOT NULL DEFAULT 'unopened' CHECK (rsvp_status IN ('unopened', 'viewed', 'confirmed', 'declined')),

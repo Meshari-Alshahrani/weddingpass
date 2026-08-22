@@ -66,6 +66,7 @@ export interface Party {
   actual_checked_in_count: number;
   table_number?: string | null; // e.g. "طاولة 7"
   needs_wheelchair?: boolean; // كبار السن وعربة التنقل
+  is_vip?: boolean; // ضيف شرف / كبار الشخصيات
   invitation_token_hash: string;
   raw_invitation_token?: string; // Only available during generation/admin views
   dispatch_status: DispatchStatus;

@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { pin, stationName, operatorName, gateSection, stationId, operatorId, role } = body;
+    const { pin, stationName, operatorName, gateSection, stationId, operatorId } = body;
 
     if (!pin || typeof pin !== 'string') {
       return NextResponse.json(
@@ -26,22 +26,30 @@ export async function POST(req: NextRequest) {
     }
 
     const event = await getDefaultEvent();
-    const serverGatePin = event.gate_pin || '2026';
-    const supervisorPin = process.env.SUPERVISOR_PIN || '9900';
+    const serverGatePin = event.gate_pin;
+    if (!serverGatePin && process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL SECURITY ERROR: Event Gate PIN is not configured in production!');
+    }
+    const resolvedGatePin = serverGatePin || '2026';
+
+    const supervisorPin = process.env.SUPERVISOR_PIN;
+    if (!supervisorPin && process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL SECURITY ERROR: SUPERVISOR_PIN environment variable is missing in production!');
+    }
+    const resolvedSupervisorPin = supervisorPin || 'dev_sup_9900_weddingpass';
 
     let determinedRole: GateRole = 'operator';
     let pinValid = false;
 
-    // Check standard Gate PIN
-    if (constantTimeCompare(pin.trim(), serverGatePin.trim())) {
-      pinValid = true;
-      determinedRole = role === 'supervisor' ? 'supervisor' : 'operator';
-    }
-
-    // Check Supervisor Master PIN
-    if (constantTimeCompare(pin.trim(), supervisorPin.trim())) {
+    // 1. Check Supervisor Master PIN (Exclusively grants 'supervisor' role)
+    if (constantTimeCompare(pin.trim(), resolvedSupervisorPin.trim())) {
       pinValid = true;
       determinedRole = 'supervisor';
+    } 
+    // 2. Check Standard Gate Station PIN (Exclusively grants 'operator' role - NEVER escalated from client body!)
+    else if (constantTimeCompare(pin.trim(), resolvedGatePin.trim())) {
+      pinValid = true;
+      determinedRole = 'operator';
     }
 
     if (!pinValid) {
@@ -51,17 +59,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Session duration: 12 hours
-    const expiresAt = Date.now() + 12 * 60 * 60 * 1000;
-    const resolvedStationId = stationId || `stn_${(stationName || 'gate1').replace(/\s+/g, '_')}`;
-    const resolvedOperatorId = operatorId || `op_${(operatorName || 'staff').replace(/\s+/g, '_')}`;
+    // Session duration: 4 hours (Strict session lifecycle)
+    const expiresAt = Date.now() + 4 * 60 * 60 * 1000;
+    const cleanStationName = (stationName || 'بوابة رئيسية').replace(/[<>"']/g, '').trim();
+    const cleanOperatorName = (operatorName || 'مشرف البوابة').replace(/[<>"']/g, '').trim();
+    const resolvedStationId = stationId || `stn_${cleanStationName.replace(/\s+/g, '_')}`;
+    const resolvedOperatorId = operatorId || `op_${cleanOperatorName.replace(/\s+/g, '_')}`;
 
     const sessionPayload: GateSessionPayload = {
       eventId: event.id,
       stationId: resolvedStationId,
-      stationName: stationName?.trim() || 'بوابة 1',
+      stationName: cleanStationName,
       operatorId: resolvedOperatorId,
-      operatorName: operatorName?.trim() || 'مشرف البوابة',
+      operatorName: cleanOperatorName,
       role: determinedRole,
       gateSection: (gateSection === 'women' ? 'women' : gateSection === 'general' ? 'general' : 'men'),
       expiresAt,
@@ -72,7 +82,7 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({
       success: true,
       code: 'AUTHENTICATED',
-      message: 'تم التحقق بنجاح وتفعيل جلسة البوابة المشفرة',
+      message: determinedRole === 'supervisor' ? 'تم تسجيل الدخول بصلاحية المشرف العام 🛡️' : 'تم التحقق وتفعيل جلسة البوابة 🌹',
       sessionToken,
       stationId: sessionPayload.stationId,
       stationName: sessionPayload.stationName,
@@ -82,13 +92,13 @@ export async function POST(req: NextRequest) {
       gateSection: sessionPayload.gateSection,
     });
 
-    // Set HttpOnly Secure SameSite Cookie
+    // Set HttpOnly Secure SameSite Cookie (4 hours lifetime)
     response.cookies.set('gate_session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       path: '/',
-      maxAge: 12 * 60 * 60, // 12 hours
+      maxAge: 4 * 60 * 60, // 4 hours
     });
 
     return response;

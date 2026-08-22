@@ -79,11 +79,10 @@ export function MomentsGallery({ initialEvent, initialMoments }: MomentsGalleryP
     setSubmittedMessage(null);
 
     try {
-      const res = await fetch('/api/admin', {
+      const res = await fetch('/api/public/moment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'add_moment',
           uploaderName: uploaderName.trim(),
           uploaderPhone: uploaderPhone.trim(),
           mediaUrl: previewDataUrl,

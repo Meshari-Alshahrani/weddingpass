@@ -160,11 +160,10 @@ export function LuxuryInvitation({
     if (!wishText.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/admin', {
+      const res = await fetch('/api/public/wish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'add_wish',
           partyName: party.party_name,
           message: wishText.trim(),
         }),

@@ -11,7 +11,7 @@ export interface AdminSessionPayload {
 }
 
 function getAdminSecret(): string {
-  const secret = process.env.ADMIN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = process.env.ADMIN_SECRET;
   if (!secret) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error('FATAL SECURITY ERROR: ADMIN_SECRET environment variable is missing in production!');
@@ -66,28 +66,15 @@ export function verifyAdminSessionToken(token: string): AdminSessionPayload | nu
 /**
  * Verifies Admin Authorization from NextRequest across Supabase Auth, Cookie, or Headers
  */
-export async function getVerifiedAdminSession(req: NextRequest): Promise<AdminSessionPayload | null> {
-  // 1. Check x-admin-key header (Direct API / System access)
-  const directKey = req.headers.get('x-admin-key');
-  if (directKey) {
-    const adminSecret = getAdminSecret();
-    if (constantTimeCompare(directKey.trim(), adminSecret.trim())) {
-      return {
-        adminId: 'master_admin',
-        role: 'superadmin',
-        expiresAt: Date.now() + 3600000,
-      };
-    }
-  }
-
-  // 2. Check Admin HttpOnly Cookie
+export async function getVerifiedAdminSession(req: NextRequest, targetEventOwnerId?: string): Promise<AdminSessionPayload | null> {
+  // 1. Check Admin HttpOnly Cookie
   const cookieToken = req.cookies.get('admin_session')?.value;
   if (cookieToken) {
     const verified = verifyAdminSessionToken(cookieToken);
     if (verified) return verified;
   }
 
-  // 3. Check Authorization Bearer Header
+  // 2. Check Authorization Bearer Header
   const authHeader = req.headers.get('authorization');
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7).trim();
@@ -101,15 +88,35 @@ export async function getVerifiedAdminSession(req: NextRequest): Promise<AdminSe
       try {
         const { data, error } = await supabase.auth.getUser(token);
         if (!error && data?.user) {
-          return {
-            adminId: data.user.id,
-            role: 'owner',
-            expiresAt: Date.now() + 3600000,
-          };
+          const user = data.user;
+          const userRole = user.app_metadata?.role || user.user_metadata?.role;
+          const isOwner = targetEventOwnerId ? user.id === targetEventOwnerId : true;
+          const isAdmin = userRole === 'admin' || userRole === 'owner' || userRole === 'superadmin' || isOwner;
+
+          if (isAdmin) {
+            return {
+              adminId: user.id,
+              role: (userRole as any) || 'owner',
+              expiresAt: Date.now() + 3600000,
+            };
+          }
         }
       } catch {
-        // Continue to null
+        // Return null
       }
+    }
+  }
+
+  // 3. Direct API Master Key (Dev/CI only or strict ADMIN_SECRET)
+  const directKey = req.headers.get('x-admin-key');
+  if (directKey) {
+    const adminSecret = getAdminSecret();
+    if (constantTimeCompare(directKey.trim(), adminSecret.trim())) {
+      return {
+        adminId: 'master_admin',
+        role: 'superadmin',
+        expiresAt: Date.now() + 3600000,
+      };
     }
   }
 
