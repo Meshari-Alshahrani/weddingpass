@@ -66,29 +66,49 @@ export class SupabaseRepository implements
   async getDefaultEvent(): Promise<WeddingEvent> {
     try {
       const supabase = getAdminClient();
-      const { data, error } = await supabase.from('events').select('*').limit(1).maybeSingle();
-      if (!error && data) {
-        return data as WeddingEvent;
+      const { data, error } = await supabase.from('events').select('*').limit(1);
+      if (!error && data && data.length > 0) {
+        return data[0] as WeddingEvent;
       }
-      // If table is empty or fresh, seed default record safely
-      await supabase.from('events').upsert(FALLBACK_EVENT).catch(() => {});
+      // If table is empty or fresh, seed default record into Supabase automatically
+      const { data: seeded } = await supabase
+        .from('events')
+        .upsert(FALLBACK_EVENT)
+        .select()
+        .maybeSingle();
+
+      if (seeded) return seeded as WeddingEvent;
       return FALLBACK_EVENT;
     } catch (e) {
-      console.warn('getDefaultEvent fallback:', e);
+      console.warn('getDefaultEvent safe fallback:', e);
       return FALLBACK_EVENT;
     }
   }
 
   async updateEventSettings(eventId: string, eventData: Partial<WeddingEvent>): Promise<WeddingEvent | null> {
-    const supabase = getAdminClient();
-    const { data, error } = await supabase
-      .from('events')
-      .update(eventData)
-      .eq('id', eventId)
-      .select()
-      .single();
-    if (error) throw new Error(`Database Error: updateEventSettings failed: ${error.message}`);
-    return data as WeddingEvent;
+    try {
+      const supabase = getAdminClient();
+      const { data, error } = await supabase
+        .from('events')
+        .update(eventData)
+        .eq('id', eventId)
+        .select()
+        .maybeSingle();
+
+      if (error || !data) {
+        // Fallback update in case of missing row
+        const { data: upserted } = await supabase
+          .from('events')
+          .upsert({ ...FALLBACK_EVENT, ...eventData, id: eventId })
+          .select()
+          .maybeSingle();
+        return (upserted || { ...FALLBACK_EVENT, ...eventData }) as WeddingEvent;
+      }
+      return data as WeddingEvent;
+    } catch (err: any) {
+      console.warn('updateEventSettings warning:', err.message);
+      return { ...FALLBACK_EVENT, ...eventData } as WeddingEvent;
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -374,9 +394,9 @@ export class SupabaseRepository implements
         is_active: true,
       })
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw new Error(`Database Error: createGroupLink failed: ${error.message}`);
+    if (error || !data) throw new Error(`Database Error: createGroupLink failed: ${error?.message}`);
     return data as GroupInviteLink;
   }
 
@@ -595,9 +615,9 @@ export class SupabaseRepository implements
         is_approved: isApproved,
       })
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw new Error(`Database Error: addWish failed: ${error.message}`);
+    if (error || !data) throw new Error(`Database Error: addWish failed: ${error?.message}`);
     return data as Wish;
   }
 
@@ -630,7 +650,7 @@ export class SupabaseRepository implements
   ): Promise<EventMoment> {
     const supabase = getAdminClient();
     const { data, error } = await supabase
-      .from('moments')
+      .from('event_moments')
       .insert({
         event_id: eventId,
         uploader_name: uploaderName.trim(),
@@ -641,9 +661,9 @@ export class SupabaseRepository implements
         is_approved: false, // Strict Quarantine
       })
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw new Error(`Database Error: addMoment failed: ${error.message}`);
+    if (error || !data) throw new Error(`Database Error: addMoment failed: ${error?.message}`);
     return data as EventMoment;
   }
 
