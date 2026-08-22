@@ -30,6 +30,12 @@ const INITIAL_EVENT: WeddingEvent = {
   theme_id: 'classic_gold',
   rsvp_mode: 'count',
   welcome_verse: 'وَمِنْ آيَاتِهِ أَنْ خَلَقَ لَكُم مِّنْ أَنفُسِكُمْ أَزْوَاجًا لِّتَسْكُنُوا إِلَيْهَا وَجَعَلَ بَيْنَكُم مَّوَدَّةً وَرَحْمَةً',
+  timeline_reception: '08:00 م',
+  timeline_ardah: '09:30 م',
+  timeline_dinner: '10:30 م',
+  iban: 'SA0380000000608010167519',
+  bank_name: 'مصرف الراجحي',
+  gate_pin: '2026',
   owner_id: null,
   created_at: new Date().toISOString(),
 };
@@ -70,7 +76,7 @@ function getDatabaseStore(): DatabaseStore {
 }
 
 function seedDemoData(db: DatabaseStore) {
-  // 1. Seed Demo Smart Group Links (Default to Men and Groom)
+  // 1. Seed Demo Smart Group Links
   const demoGroups: GroupInviteLink[] = [
     {
       id: 'group_colleagues',
@@ -186,17 +192,17 @@ function seedDemoData(db: DatabaseStore) {
     },
   ];
 
-  // 4. Seed Demo Individual Parties with Hosts & Table Assignments
+  // 4. Seed Demo Individual Parties with Hosts, Tables & Wheelchair flags
   const demoSeed = [
-    { name: 'أحمد محمد العتيبي (عائلة)', phone: '966501234567', allowed: 4, confirmed: 3, rsvp: 'confirmed' as RSVPStatus, section: 'men', host: 'العريس', table: 'طاولة 3', group: 'دعوة خاصة' },
-    { name: 'الشيخ سلطان بن مطلق السبيعي', phone: '966551239876', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'vip', host: 'والد العريس', table: 'طاولة كبار الشخصيات VIP', group: 'دعوة خاصة' },
-    { name: 'أم راشد الشمري الكريمة', phone: '966567891234', allowed: 3, confirmed: 3, rsvp: 'confirmed' as RSVPStatus, section: 'women', host: 'قسم النساء', table: 'طاولة 12 (نساء)', group: 'دعوة خاصة' },
-    { name: 'المهندس طارق القحطاني', phone: '966543216789', allowed: 2, confirmed: 0, rsvp: 'declined' as RSVPStatus, section: 'men', host: 'العريس', table: null, group: 'قروب زملاء العمل 💼' },
-    { name: 'عبدالعزيز بن فهد التميمي', phone: '966509876543', allowed: 5, confirmed: 0, rsvp: 'viewed' as RSVPStatus, section: 'men', host: 'العريس', table: null, group: 'قروب شباب العائلة 👥' },
-    { name: 'عائلة الدوسري الكريمة', phone: '966531122334', allowed: 4, confirmed: 0, rsvp: 'unopened' as RSVPStatus, section: 'women', host: 'والد العروس', table: 'طاولة 8', group: 'دعوة خاصة' },
-    { name: 'فيصل بن عبدالله الشهري', phone: '966548899001', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'men', host: 'العريس', table: 'طاولة 5', group: 'قروب زملاء العمل 💼' },
-    { name: 'سارة بنت إبراهيم الراجحي', phone: '966599887766', allowed: 1, confirmed: 1, rsvp: 'confirmed' as RSVPStatus, section: 'women', host: 'قسم النساء', table: 'طاولة 14 (نساء)', group: 'دعوة خاصة' },
-    { name: 'اللواء م. ناصر بن عائض القحطاني', phone: '966505554433', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'men', host: 'والد العريس', table: 'طاولة كبار الشخصيات VIP', group: 'قروب وجهاء وأعيان القبيلة 👑' },
+    { name: 'أحمد محمد العتيبي (عائلة)', phone: '966501234567', allowed: 4, confirmed: 3, rsvp: 'confirmed' as RSVPStatus, section: 'men', host: 'العريس', table: 'طاولة 3', wheelchair: false, group: 'دعوة خاصة' },
+    { name: 'الشيخ سلطان بن مطلق السبيعي', phone: '966551239876', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'vip', host: 'والد العريس', table: 'طاولة كبار الشخصيات VIP', wheelchair: true, group: 'دعوة خاصة' },
+    { name: 'أم راشد الشمري الكريمة', phone: '966567891234', allowed: 3, confirmed: 3, rsvp: 'confirmed' as RSVPStatus, section: 'women', host: 'قسم النساء', table: 'طاولة 12 (نساء)', wheelchair: false, group: 'دعوة خاصة' },
+    { name: 'المهندس طارق القحطاني', phone: '966543216789', allowed: 2, confirmed: 0, rsvp: 'declined' as RSVPStatus, section: 'men', host: 'العريس', table: null, wheelchair: false, group: 'قروب زملاء العمل 💼' },
+    { name: 'عبدالعزيز بن فهد التميمي', phone: '966509876543', allowed: 5, confirmed: 0, rsvp: 'viewed' as RSVPStatus, section: 'men', host: 'العريس', table: null, wheelchair: false, group: 'قروب شباب العائلة 👥' },
+    { name: 'عائلة الدوسري الكريمة', phone: '966531122334', allowed: 4, confirmed: 0, rsvp: 'unopened' as RSVPStatus, section: 'women', host: 'والد العروس', table: 'طاولة 8', wheelchair: false, group: 'دعوة خاصة' },
+    { name: 'فيصل بن عبدالله الشهري', phone: '966548899001', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'men', host: 'العريس', table: 'طاولة 5', wheelchair: false, group: 'قروب زملاء العمل 💼' },
+    { name: 'سارة بنت إبراهيم الراجحي', phone: '966599887766', allowed: 1, confirmed: 1, rsvp: 'confirmed' as RSVPStatus, section: 'women', host: 'قسم النساء', table: 'طاولة 14 (نساء)', wheelchair: false, group: 'دعوة خاصة' },
+    { name: 'اللواء م. ناصر بن عائض القحطاني', phone: '966505554433', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'vip', host: 'والد العريس', table: 'طاولة كبار الشخصيات VIP', wheelchair: false, group: 'قروب وجهاء وأعيان القبيلة 👑' },
   ];
 
   demoSeed.forEach((item, idx) => {
@@ -215,6 +221,7 @@ function seedDemoData(db: DatabaseStore) {
       confirmed_count: item.confirmed,
       actual_checked_in_count: 0,
       table_number: item.table,
+      needs_wheelchair: item.wheelchair,
       invitation_token_hash: invHash,
       raw_invitation_token: rawInvToken,
       dispatch_status: item.rsvp !== 'unopened' ? 'sent' : 'draft',
@@ -282,7 +289,8 @@ export async function submitPartyRSVP(
   partyId: string,
   status: 'confirmed' | 'declined',
   attendingCount: number,
-  notes?: string
+  notes?: string,
+  needsWheelchair?: boolean
 ): Promise<{ success: boolean; entryPass?: EntryPass; message: string }> {
   const db = getDatabaseStore();
   const party = db.parties.get(partyId);
@@ -296,6 +304,10 @@ export async function submitPartyRSVP(
   party.rsvp_status = status;
   party.rsvp_at = new Date().toISOString();
   party.updated_at = new Date().toISOString();
+  if (needsWheelchair !== undefined) {
+    party.needs_wheelchair = needsWheelchair;
+  }
+
   if (notes !== undefined) {
     party.notes = notes;
     if (notes && notes.trim().length > 3) {
@@ -436,7 +448,7 @@ export async function toggleWishApproval(wishId: string, isApproved: boolean): P
 }
 
 // ------------------------------------------------------------------------------
-// Smart Group Links (Open RSVP for WhatsApp Groups)
+// Smart Group Links
 // ------------------------------------------------------------------------------
 
 export async function getAllGroupLinks(eventId: string): Promise<GroupInviteLink[]> {
@@ -502,7 +514,6 @@ export async function registerGroupGuest(
   const normalizedPhone = normalizeSaudiPhone(guestPhone);
   const seats = Math.min(Math.max(1, seatsCount), group.max_seats_per_guest);
 
-  // 1. Phone Duplicate Check for this event
   if (normalizedPhone) {
     for (const p of Array.from(db.parties.values())) {
       if (p.event_id === event.id && p.primary_phone === normalizedPhone) {
@@ -540,7 +551,6 @@ export async function registerGroupGuest(
     }
   }
 
-  // 2. Strict Quota Check
   if (group.limit_mode === 'strict' && group.max_capacity) {
     if (group.confirmed_count + seats > group.max_capacity) {
       const remaining = Math.max(0, group.max_capacity - group.confirmed_count);
@@ -554,7 +564,6 @@ export async function registerGroupGuest(
     }
   }
 
-  // 3. Register New Party
   const rawInvToken = generateInvitationToken();
   const invHash = await hashToken(rawInvToken);
   const partyId = `party_grp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -571,6 +580,7 @@ export async function registerGroupGuest(
     confirmed_count: seats,
     actual_checked_in_count: 0,
     table_number: null,
+    needs_wheelchair: false,
     invitation_token_hash: invHash,
     raw_invitation_token: rawInvToken,
     dispatch_status: 'sent',
@@ -685,6 +695,7 @@ export async function getActivePassesForOfflineCache(eventId: string) {
         section: party.section,
         tableNumber: party.table_number || null,
         hostName: party.host_name || 'العريس',
+        needsWheelchair: party.needs_wheelchair || false,
         isCheckedIn: pass.is_checked_in,
       });
     }
@@ -694,7 +705,7 @@ export async function getActivePassesForOfflineCache(eventId: string) {
 }
 
 // ------------------------------------------------------------------------------
-// Gate Check-In with Cross-Section Alerts & Table Routing
+// Gate Check-In with VIP & Wheelchair Detection
 // ------------------------------------------------------------------------------
 
 export async function executeCheckIn(
@@ -836,6 +847,7 @@ export async function executeCheckIn(
   }
 
   const finalCount = overrideCount && overrideCount > 0 ? overrideCount : (party.confirmed_count || 1);
+  const isVip = Boolean(party.section === 'vip' || party.host_name === 'والد العروس' || (party.table_number && party.table_number.includes('VIP')));
 
   pass.is_checked_in = true;
   pass.first_check_in_at = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
@@ -865,6 +877,8 @@ export async function executeCheckIn(
     section: party.section,
     table_number: party.table_number || null,
     host_name: party.host_name,
+    is_vip: isVip,
+    needs_wheelchair: Boolean(party.needs_wheelchair),
     check_in_time: pass.first_check_in_at,
     message: party.table_number
       ? `تم التحقق بنجاح • ${party.table_number}`
@@ -879,7 +893,7 @@ export async function getAllParties(eventId: string): Promise<Party[]> {
 
 export async function bulkAddParties(
   eventId: string,
-  rawGuests: Array<{ party_name: string; primary_phone?: string; allowed_count?: number; section?: string; host_name?: string; table_number?: string; notes?: string }>
+  rawGuests: Array<{ party_name: string; primary_phone?: string; allowed_count?: number; section?: string; host_name?: string; table_number?: string; wheelchair?: boolean; notes?: string }>
 ): Promise<{ addedCount: number; parties: Party[] }> {
   const db = getDatabaseStore();
   const newParties: Party[] = [];
@@ -901,11 +915,12 @@ export async function bulkAddParties(
       confirmed_count: 0,
       actual_checked_in_count: 0,
       table_number: raw.table_number ? raw.table_number.trim() : null,
+      needs_wheelchair: Boolean(raw.wheelchair),
       invitation_token_hash: invHash,
       raw_invitation_token: rawInvToken,
       dispatch_status: 'draft',
       rsvp_status: 'unopened',
-      section: raw.section || 'men', // Default to men
+      section: raw.section || 'men',
       notes: raw.notes || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -980,7 +995,6 @@ export async function getEventStats(eventId: string) {
   const usedPasses = passes.filter((p) => p.is_checked_in).length;
   const totalAdmittedIndividuals = parties.reduce((acc, p) => acc + (p.actual_checked_in_count || 0), 0);
 
-  // Host Breakdown Stats
   const hosts = ['العريس', 'والد العريس', 'والد العروس', 'قسم النساء'];
   const hostStats = hosts.map((h) => {
     const hostParties = parties.filter((p) => (p.host_name || 'العريس') === h);
@@ -1042,4 +1056,3 @@ export async function searchParties(eventId: string, query: string): Promise<Par
     return nameMatch || phoneMatch || notesMatch || groupMatch || tableMatch;
   });
 }
-

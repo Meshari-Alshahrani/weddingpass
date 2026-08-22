@@ -28,6 +28,12 @@ export interface WeddingEvent {
   rsvp_mode: 'simple' | 'count';
   welcome_verse?: string | null;
   invitation_image_url?: string | null;
+  timeline_reception?: string | null; // e.g. "08:00 م"
+  timeline_ardah?: string | null; // e.g. "09:30 م"
+  timeline_dinner?: string | null; // e.g. "10:30 م"
+  iban?: string | null; // e.g. "SA0380000000608010167519"
+  bank_name?: string | null; // e.g. "مصرف الراجحي"
+  gate_pin?: string | null; // e.g. "2026"
   owner_id?: string | null;
   created_at: string;
 }
@@ -59,6 +65,7 @@ export interface Party {
   confirmed_count: number;
   actual_checked_in_count: number;
   table_number?: string | null; // e.g. "طاولة 7"
+  needs_wheelchair?: boolean; // كبار السن وعربة التنقل
   invitation_token_hash: string;
   raw_invitation_token?: string; // Only available during generation/admin views
   dispatch_status: DispatchStatus;
@@ -149,6 +156,8 @@ export interface CheckInRPCResponse {
   section?: string;
   table_number?: string | null;
   host_name?: string;
+  is_vip?: boolean;
+  needs_wheelchair?: boolean;
   is_cross_section_warning?: boolean;
   check_in_time?: string;
   first_check_in_at?: string;

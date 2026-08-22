@@ -36,6 +36,11 @@ import {
   Armchair,
   Trash2,
   Filter,
+  HeartHandshake,
+  Printer,
+  Gift,
+  Lock,
+  Clock,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -68,7 +73,7 @@ export function AdminDashboard({
   const [moments, setMoments] = useState<EventMoment[]>(initialMoments);
   const [originUrl, setOriginUrl] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'all' | 'groups' | 'confirmed' | 'missing' | 'reminders' | 'wishes' | 'moments' | 'declined'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'groups' | 'confirmed' | 'missing' | 'reminders' | 'thanks' | 'wishes' | 'moments' | 'declined'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSection, setSelectedSection] = useState<string>('all');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
@@ -91,6 +96,12 @@ export function AdminDashboard({
   const [editVerse, setEditVerse] = useState(initialEvent.welcome_verse || '');
   const [editTheme, setEditTheme] = useState(initialEvent.theme_id || 'classic_gold');
   const [editImageUrl, setEditImageUrl] = useState(initialEvent.invitation_image_url || '');
+  const [editReceptionTime, setEditReceptionTime] = useState(initialEvent.timeline_reception || '08:00 م');
+  const [editArdahTime, setEditArdahTime] = useState(initialEvent.timeline_ardah || '09:30 م');
+  const [editDinnerTime, setEditDinnerTime] = useState(initialEvent.timeline_dinner || '10:30 م');
+  const [editIban, setEditIban] = useState(initialEvent.iban || '');
+  const [editBankName, setEditBankName] = useState(initialEvent.bank_name || 'مصرف الراجحي');
+  const [editGatePin, setEditGatePin] = useState(initialEvent.gate_pin || '2026');
 
   // Create Group Link Modal State
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
@@ -100,7 +111,7 @@ export function AdminDashboard({
   const [newGroupLimitMode, setNewGroupLimitMode] = useState<GroupLimitMode>('warning');
   const [newGroupCapacity, setNewGroupCapacity] = useState<number>(30);
   const [newGroupMaxSeats, setNewGroupMaxSeats] = useState<number>(2);
-  const [newGroupSection, setNewGroupSection] = useState<string>('men'); // Default to men
+  const [newGroupSection, setNewGroupSection] = useState<string>('men');
   const [creatingGroup, setCreatingGroup] = useState(false);
 
   // Excel Import state
@@ -115,7 +126,7 @@ export function AdminDashboard({
   const [manualHost, setManualHost] = useState<HostRole>('العريس');
   const [manualTable, setManualTable] = useState('');
   const [manualAllowed, setManualAllowed] = useState(2);
-  const [manualSection, setManualSection] = useState('men'); // Default to men
+  const [manualSection, setManualSection] = useState('men');
 
   // Inline Table Edit Modal
   const [editingTableParty, setEditingTableParty] = useState<Party | null>(null);
@@ -233,6 +244,12 @@ export function AdminDashboard({
             welcome_verse: editVerse.trim(),
             theme_id: editTheme,
             invitation_image_url: editImageUrl.trim(),
+            timeline_reception: editReceptionTime.trim(),
+            timeline_ardah: editArdahTime.trim(),
+            timeline_dinner: editDinnerTime.trim(),
+            iban: editIban.trim() || null,
+            bank_name: editBankName.trim() || null,
+            gate_pin: editGatePin.trim() || '2026',
           },
         }),
       });
@@ -355,6 +372,20 @@ ${inviteUrl}
     window.open(waUrl, '_blank');
   };
 
+  const handleSendThankYouWhatsApp = (party: Party) => {
+    const cleanPhone = party.primary_phone?.replace(/[^0-9]/g, '') || '';
+    const thankYouMessage = `السلام عليكم ورحمة الله وبركاته 🌹
+شكراً من القلب يا ${party.party_name} على حضوركم وتشريفكم حفل زفاف ${event.groom_name} و ${event.bride_name} ومشاركتنا فرحتنا الليلة..
+
+أسعدتم قلوبنا ونسأل الله أن يديم عليكم الأفراح والمسرات دائماً ✨`;
+
+    const waUrl = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(thankYouMessage)}`
+      : `https://wa.me/?text=${encodeURIComponent(thankYouMessage)}`;
+
+    window.open(waUrl, '_blank');
+  };
+
   const handleRevokePass = async (partyId: string) => {
     if (!confirm('هل أنت متأكد من رغبتك في إلغاء صلاحية بطاقة الدخول هذه؟')) return;
     try {
@@ -390,7 +421,7 @@ ${inviteUrl}
           party_name: row.name || row.الاسم || row.المدعو || 'ضيف كريم',
           primary_phone: phone,
           allowed_count: Number(row.allowed_guests || row.العدد || row.المرافقين || 1),
-          section: row.section || row.القسم || 'men', // Default to men
+          section: row.section || row.القسم || 'men',
           host_name: row.host || row.الداعي || 'العريس',
           table_number: row.table || row.الطاولة || null,
           notes: row.notes || row.ملاحظات || '',
@@ -493,6 +524,7 @@ ${inviteUrl}
 
     if (activeTab === 'confirmed') return party.rsvp_status === 'confirmed';
     if (activeTab === 'reminders') return party.rsvp_status === 'confirmed' && party.actual_checked_in_count === 0;
+    if (activeTab === 'thanks') return party.actual_checked_in_count > 0 || party.rsvp_status === 'confirmed';
     if (activeTab === 'declined') return party.rsvp_status === 'declined';
     if (activeTab === 'missing') return party.rsvp_status === 'confirmed' && party.actual_checked_in_count === 0;
 
@@ -524,6 +556,15 @@ ${inviteUrl}
           >
             <Home className="w-4 h-4 text-slate-400" />
             <span>الرئيسية</span>
+          </Link>
+
+          <Link
+            href="/admin/manifest"
+            target="_blank"
+            className="py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <Printer className="w-4 h-4 text-amber-400" />
+            <span>كشف الطوارئ (PDF)</span>
           </Link>
 
           <Link
@@ -570,7 +611,7 @@ ${inviteUrl}
         </div>
       </header>
 
-      {/* Host Breakdown Cards (نظام الداعين المتعددين) */}
+      {/* Host Breakdown Cards */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
@@ -822,6 +863,15 @@ ${inviteUrl}
               <span>تذكير المؤكدين ({stats.confirmedParties - stats.usedPasses})</span>
             </button>
             <button
+              onClick={() => setActiveTab('thanks')}
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                activeTab === 'thanks' ? 'bg-purple-600 text-white' : 'bg-slate-950 text-purple-400 hover:text-purple-300'
+              }`}
+            >
+              <HeartHandshake className="w-3.5 h-3.5" />
+              <span>رسائل الشكر بعد الزواج ({stats.usedPasses > 0 ? stats.usedPasses : stats.confirmedParties})</span>
+            </button>
+            <button
               onClick={() => setActiveTab('moments')}
               className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
                 activeTab === 'moments' ? 'bg-cyan-600 text-white' : 'bg-slate-950 text-cyan-400 hover:text-cyan-300'
@@ -876,6 +926,68 @@ ${inviteUrl}
             </button>
           </div>
         </div>
+
+        {/* THANK YOU DISPATCHER TAB CONTENT */}
+        {activeTab === 'thanks' && (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="bg-purple-950/40 border border-purple-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div>
+                <span className="font-bold text-purple-300 text-sm flex items-center gap-1.5">
+                  <HeartHandshake className="w-4 h-4 text-purple-400" />
+                  <span>مُولد رسائل الشكر والامتنان بعد انتهاء الحفل (Thank You Dispatcher)</span>
+                </span>
+                <p className="text-slate-400 mt-1">
+                  أرسل رسالة شكر مخصصة باسم الضيف بنقرة واحدة عبر WhatsApp لمن شرفكم بالحضور الليلة.
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-800">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="p-3.5 font-semibold">اسم الضيف الكريم</th>
+                    <th className="p-3.5 font-semibold">الداعي</th>
+                    <th className="p-3.5 font-semibold">رقم الجوال</th>
+                    <th className="p-3.5 font-semibold">حالة الدخول</th>
+                    <th className="p-3.5 font-semibold text-center">إرسال الشكر</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {filteredParties.map((party) => (
+                    <tr key={party.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="p-3.5 font-bold text-slate-100">{party.party_name}</td>
+                      <td className="p-3.5">
+                        <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded text-[10px] font-bold">
+                          {party.host_name || 'العريس'}
+                        </span>
+                      </td>
+                      <td className="p-3.5 font-mono text-slate-400" dir="ltr">{party.primary_phone || '-'}</td>
+                      <td className="p-3.5">
+                        {party.actual_checked_in_count > 0 ? (
+                          <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                            ✅ حضر ({party.actual_checked_in_count})
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-[10px]">مؤكد الحضور</span>
+                        )}
+                      </td>
+                      <td className="p-3.5 text-center">
+                        <button
+                          onClick={() => handleSendThankYouWhatsApp(party)}
+                          className="py-1.5 px-3 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-bold flex items-center justify-center gap-1.5 mx-auto transition-colors cursor-pointer"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>إرسال شكر واتساب 🌹</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* MOMENTS TAB CONTENT */}
         {activeTab === 'moments' && (
@@ -1008,8 +1120,8 @@ ${inviteUrl}
           </div>
         )}
 
-        {/* GUESTS TABLE & FILTERS (When not wishes or moments) */}
-        {activeTab !== 'wishes' && activeTab !== 'moments' && (
+        {/* GUESTS TABLE & FILTERS (When not wishes, moments, or thanks) */}
+        {activeTab !== 'wishes' && activeTab !== 'moments' && activeTab !== 'thanks' && (
           <>
             {/* Search & Filter Bar */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -1104,6 +1216,9 @@ ${inviteUrl}
                             </div>
                           )}
                           {party.notes && <div className="text-[10px] text-amber-300/80 mt-0.5">{party.notes}</div>}
+                          {party.needs_wheelchair && (
+                            <div className="text-[10px] text-purple-300 font-bold mt-0.5">♿ يحتاج عربة تنقل</div>
+                          )}
                         </td>
 
                         <td className="p-3.5">
@@ -1446,7 +1561,7 @@ ${inviteUrl}
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 <Settings className="w-5 h-5 text-amber-400" />
-                <span>إعدادات وبيانات الحفل وصورة كرت الدعوة</span>
+                <span>إعدادات وبيانات الحفل والفقرات ورمز البوابة</span>
               </h2>
               <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-slate-200">
                 ✕
@@ -1471,6 +1586,89 @@ ${inviteUrl}
                     value={editBride}
                     onChange={(e) => setEditBride(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              {/* Timeline Settings */}
+              <div className="p-3.5 bg-slate-950 rounded-2xl border border-amber-500/20 space-y-2.5">
+                <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                  <Clock className="w-4 h-4" />
+                  <span>جدول فقرات الحفل (يظهر في صفحة الدعوة)</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-slate-400 block mb-1 text-[11px]">مراسم الاستقبال</label>
+                    <input
+                      type="text"
+                      value={editReceptionTime}
+                      onChange={(e) => setEditReceptionTime(e.target.value)}
+                      placeholder="08:00 م"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-100 focus:outline-none focus:border-amber-400 font-mono text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1 text-[11px]">العرضة ودخول العريس</label>
+                    <input
+                      type="text"
+                      value={editArdahTime}
+                      onChange={(e) => setEditArdahTime(e.target.value)}
+                      placeholder="09:30 م"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-100 focus:outline-none focus:border-amber-400 font-mono text-center"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1 text-[11px]">مأدبة العشاء</label>
+                    <input
+                      type="text"
+                      value={editDinnerTime}
+                      onChange={(e) => setEditDinnerTime(e.target.value)}
+                      placeholder="10:30 م"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-100 focus:outline-none focus:border-amber-400 font-mono text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Gifting / IBAN & Gate PIN */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                    <Gift className="w-4 h-4" />
+                    <span>رقم الآيبان للعانية (اختياري)</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={editIban}
+                    onChange={(e) => setEditIban(e.target.value)}
+                    placeholder="SA0000000000000000000000"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-100 focus:outline-none focus:border-amber-400 font-mono text-xs"
+                    dir="ltr"
+                  />
+                  <input
+                    type="text"
+                    value={editBankName}
+                    onChange={(e) => setEditBankName(e.target.value)}
+                    placeholder="اسم البنك (مثال: مصرف الراجحي)"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-slate-100 focus:outline-none focus:border-amber-400 text-xs"
+                  />
+                </div>
+
+                <div className="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
+                  <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                    <Lock className="w-4 h-4" />
+                    <span>رمز PIN لماسح البوابات</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    الرمز السري لفتح تطبيق ماسح البوابة لموظفي الاستقبال:
+                  </p>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={editGatePin}
+                    onChange={(e) => setEditGatePin(e.target.value)}
+                    placeholder="2026"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400 font-mono text-center font-bold text-sm tracking-widest"
                   />
                 </div>
               </div>

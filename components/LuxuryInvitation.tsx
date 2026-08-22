@@ -20,8 +20,10 @@ import {
   CameraOff,
   Baby,
   Camera,
-  Image as ImageIcon,
+  Gift,
+  Copy,
   Download,
+  Accessibility,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -47,10 +49,15 @@ export function LuxuryInvitation({
     party.confirmed_count > 0 ? party.confirmed_count : party.allowed_count
   );
   const [wishText, setWishText] = useState<string>(party.notes || '');
+  const [needsWheelchair, setNeedsWheelchair] = useState<boolean>(Boolean(party.needs_wheelchair));
   const [entryPass, setEntryPass] = useState<EntryPass | undefined>(initialEntryPass);
   const [loading, setLoading] = useState(false);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+
+  // Modals state
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [ibanCopied, setIbanCopied] = useState(false);
 
   const isWomen = party.section === 'women';
 
@@ -95,6 +102,7 @@ export function LuxuryInvitation({
           status: 'confirmed',
           attendingCount: selectedCount,
           notes: wishText,
+          needsWheelchair,
         }),
       });
 
@@ -173,6 +181,13 @@ export function LuxuryInvitation({
     }
   };
 
+  const handleCopyIban = () => {
+    if (!event.iban) return;
+    navigator.clipboard.writeText(event.iban.replace(/\s+/g, ''));
+    setIbanCopied(true);
+    setTimeout(() => setIbanCopied(false), 2500);
+  };
+
   // Google Calendar URL
   const cleanDate = event.event_date.replace(/-/g, '');
   const cleanTime = event.event_time.replace(/:/g, '').slice(0, 4) + '00';
@@ -183,6 +198,12 @@ export function LuxuryInvitation({
   )}&location=${encodeURIComponent(event.venue_name)}&ctz=Asia/Riyadh`;
 
   const appleCalendarUrl = `/api/calendar?guest=${encodeURIComponent(party.party_name)}`;
+
+  // Navigation URLs
+  const navQuery = event.venue_name + (event.venue_address ? ` ${event.venue_address}` : '');
+  const googleMapsNavUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(navQuery)}`;
+  const appleMapsNavUrl = `https://maps.apple.com/?q=${encodeURIComponent(navQuery)}`;
+  const wazeNavUrl = `https://waze.com/ul?q=${encodeURIComponent(navQuery)}&navigate=yes`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center py-6 px-4 sm:px-6">
@@ -318,17 +339,14 @@ export function LuxuryInvitation({
             </div>
 
             <div className="flex gap-2 pt-1 border-t border-amber-500/10">
-              {event.venue_maps_url && (
-                <a
-                  href={event.venue_maps_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Navigation className="w-3.5 h-3.5" />
-                  <span>موقع القاعة</span>
-                </a>
-              )}
+              <button
+                onClick={() => setIsMapModalOpen(true)}
+                className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>موقع القاعة (خرائط)</span>
+              </button>
+
               <button
                 onClick={() => setIsCalendarModalOpen(true)}
                 className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
@@ -336,6 +354,31 @@ export function LuxuryInvitation({
                 <CalendarPlus className="w-3.5 h-3.5" />
                 <span>إضافة للتقويم</span>
               </button>
+            </div>
+          </div>
+
+          {/* Wedding Timeline Widget (جدول فقرات الحفل) */}
+          <div className="bg-slate-950/80 rounded-2xl border border-amber-500/20 p-3.5 text-right space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-bold text-amber-300 border-b border-amber-500/10 pb-1.5">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span>جدول فقرات المساء</span>
+              </span>
+            </div>
+
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-slate-300">
+                <span>🕢 استقبال الضيوف ومراسم الترحيب</span>
+                <span className="font-mono text-amber-400 font-bold">{event.timeline_reception || '08:00 م'}</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>🕘 العرضة النجدية ودخول العريس</span>
+                <span className="font-mono text-amber-400 font-bold">{event.timeline_ardah || '09:30 م'}</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>🕥 مأدبة العشاء</span>
+                <span className="font-mono text-amber-400 font-bold">{event.timeline_dinner || '10:30 م'}</span>
+              </div>
             </div>
           </div>
 
@@ -407,6 +450,38 @@ export function LuxuryInvitation({
                 <p className="text-[11px] text-slate-400 leading-relaxed">
                   شارك العريس لقطاتك وصورك العفوية في القاعة لتوثيق هذه الليلة المباركة.
                 </p>
+              </div>
+            )}
+
+            {/* Classy Digital Gifting / Eaniyah Box (إذا تم ضبط الآيبان) */}
+            {event.iban && (
+              <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-4 text-right space-y-2.5">
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                  <Gift className="w-4 h-4 text-amber-400" />
+                  <span>تبريكاتكم وهداياكم تسعدنا 🎁</span>
+                </div>
+                <div className="flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">{event.bank_name || 'الحساب البنكي'}</span>
+                    <span className="font-mono text-xs text-amber-200 font-bold" dir="ltr">{event.iban}</span>
+                  </div>
+                  <button
+                    onClick={handleCopyIban}
+                    className="py-1.5 px-3 rounded-lg gold-gradient-bg text-slate-950 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    {ibanCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>تم النسخ ✓</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>نسخ الآيبان</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -503,6 +578,20 @@ export function LuxuryInvitation({
                       {num === 1 ? (isWomen ? 'سيدة واحدة' : 'شخص واحد') : `${num} أشخاص`}
                     </button>
                   ))}
+                </div>
+
+                {/* Special Assistance / Wheelchair Toggle */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <Accessibility className="w-4 h-4 text-purple-400" />
+                    <span>هل توجد حاجة لمساعدة خاصة / عربة تنقل لكبار السن؟</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={needsWheelchair}
+                    onChange={(e) => setNeedsWheelchair(e.target.checked)}
+                    className="w-4 h-4 accent-amber-400 cursor-pointer"
+                  />
                 </div>
 
                 <div className="space-y-1">
@@ -620,6 +709,65 @@ export function LuxuryInvitation({
           </div>
         )}
       </main>
+
+      {/* Smart Map Selection Modal */}
+      {isMapModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
+            <h3 className="text-sm font-bold text-amber-300 flex items-center justify-center gap-2">
+              <Navigation className="w-4 h-4 text-amber-400" />
+              <span>اختر تطبيق الملاحة المفضل لديك</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              سيتم فتح موقع {event.venue_name} في التطبيق المختار مباشرة:
+            </p>
+
+            <div className="space-y-2 pt-2">
+              <a
+                href={googleMapsNavUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsMapModalOpen(false)}
+                className="w-full py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-blue-400 flex items-center justify-between transition-colors"
+              >
+                <span>📍 خرائط Google (Google Maps)</span>
+                <ExternalLink className="w-4 h-4 text-slate-500" />
+              </a>
+
+              <a
+                href={appleMapsNavUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsMapModalOpen(false)}
+                className="w-full py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-200 flex items-center justify-between transition-colors"
+              >
+                <span>🍏 خرائط Apple (Apple Maps)</span>
+                <ExternalLink className="w-4 h-4 text-slate-500" />
+              </a>
+
+              <a
+                href={wazeNavUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsMapModalOpen(false)}
+                className="w-full py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-sky-400 flex items-center justify-between transition-colors"
+              >
+                <span>🚗 تطبيق Waze للزحام</span>
+                <ExternalLink className="w-4 h-4 text-slate-500" />
+              </a>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 text-center">
+              <button
+                onClick={() => setIsMapModalOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Calendar Modal */}
       {isCalendarModalOpen && (

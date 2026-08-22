@@ -286,17 +286,16 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
             </div>
 
             <div className="flex gap-2 pt-1 border-t border-amber-500/10">
-              {event.venue_maps_url && (
-                <a
-                  href={event.venue_maps_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Navigation className="w-3.5 h-3.5" />
-                  <span>موقع القاعة</span>
-                </a>
-              )}
+              <a
+                href={event.venue_maps_url || `https://maps.google.com/?q=${encodeURIComponent(event.venue_name)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>موقع القاعة (خرائط)</span>
+              </a>
+
               <button
                 onClick={() => setIsCalendarModalOpen(true)}
                 className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
@@ -304,6 +303,31 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
                 <CalendarPlus className="w-3.5 h-3.5" />
                 <span>إضافة للتقويم</span>
               </button>
+            </div>
+          </div>
+
+          {/* Wedding Timeline Widget */}
+          <div className="bg-slate-950/80 rounded-2xl border border-amber-500/20 p-3.5 text-right space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-bold text-amber-300 border-b border-amber-500/10 pb-1.5">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span>جدول فقرات المساء</span>
+              </span>
+            </div>
+
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between text-slate-300">
+                <span>🕢 استقبال الضيوف ومراسم الترحيب</span>
+                <span className="font-mono text-amber-400 font-bold">{event.timeline_reception || '08:00 م'}</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>🕘 العرضة النجدية ودخول العريس</span>
+                <span className="font-mono text-amber-400 font-bold">{event.timeline_ardah || '09:30 م'}</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-300">
+                <span>🕥 مأدبة العشاء</span>
+                <span className="font-mono text-amber-400 font-bold">{event.timeline_dinner || '10:30 م'}</span>
+              </div>
             </div>
           </div>
 

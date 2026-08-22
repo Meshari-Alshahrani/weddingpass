@@ -10,18 +10,18 @@ import {
 import {
   ShieldCheck,
   AlertTriangle,
-  RefreshCw,
   Search,
-  Users,
   Camera,
   XCircle,
-  WifiOff,
   CloudUpload,
   Sparkles,
   Volume2,
   VolumeX,
   Armchair,
-  UserCheck,
+  Lock,
+  Crown,
+  Flashlight,
+  Accessibility,
 } from 'lucide-react';
 
 interface GateScannerProps {
@@ -37,6 +37,7 @@ interface OfflinePassRecord {
   section: string;
   tableNumber?: string | null;
   hostName?: string;
+  needsWheelchair?: boolean;
   isCheckedIn: boolean;
 }
 
@@ -49,6 +50,8 @@ interface OfflineQueuedCheckIn {
 }
 
 export function GateScanner({ initialEvent }: GateScannerProps) {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [pinInput, setPinInput] = useState<string>('');
   const [stationName, setStationName] = useState('بوابة الاستقبال 1');
   const [operatorName, setOperatorName] = useState('فهد العتيبي');
   const [gateSection, setGateSection] = useState<'men' | 'women' | 'general'>('men'); // Default to men's gate
@@ -58,6 +61,10 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
   const [manualToken, setManualToken] = useState('');
   const [audioEnabled, setAudioEnabled] = useState(true);
 
+  // Torch & Wake Lock State
+  const [torchOn, setTorchOn] = useState<boolean>(false);
+  const [supportsTorch, setSupportsTorch] = useState<boolean>(false);
+
   // Offline Engine State
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [offlineCache, setOfflineCache] = useState<OfflinePassRecord[]>([]);
@@ -66,9 +73,63 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const wakeLockRef = useRef<any>(null);
 
+  const correctPin = initialEvent.gate_pin || '2026';
+
+  // 1. PIN Auth Check
   useEffect(() => {
-    // 1. Check network status
+    const savedPin = sessionStorage.getItem(`weddingpass_gate_pin_${initialEvent.id}`);
+    if (savedPin === correctPin) {
+      setIsAuthenticated(true);
+    }
+  }, [correctPin, initialEvent.id]);
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinInput.trim() === correctPin) {
+      sessionStorage.setItem(`weddingpass_gate_pin_${initialEvent.id}`, correctPin);
+      setIsAuthenticated(true);
+    } else {
+      alert('رمز الدخول غير صحيح');
+      setPinInput('');
+    }
+  };
+
+  // 2. Screen Wake Lock with visibilitychange Auto-Reacquire
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+        try {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        } catch (err) {
+          console.log('Wake lock request error:', err);
+        }
+      }
+    };
+
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(console.error);
+      }
+    };
+  }, [isAuthenticated]);
+
+  // 3. Offline cache and network listeners
+  useEffect(() => {
     const updateOnlineStatus = () => {
       setIsOfflineMode(!navigator.onLine);
     };
@@ -76,10 +137,8 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
     window.addEventListener('offline', updateOnlineStatus);
     updateOnlineStatus();
 
-    // 2. Pre-fetch active passes for offline scanning
     fetchOfflineCache();
 
-    // 3. Load pending queue from localStorage
     const savedQueue = localStorage.getItem(`weddingpass_offline_queue_${initialEvent.id}`);
     if (savedQueue) {
       try {
@@ -98,7 +157,7 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
     };
   }, [initialEvent.id]);
 
-  const playChirp = (isSuccess: boolean) => {
+  const playChirp = (isSuccess: boolean, isVip: boolean = false) => {
     if (!audioEnabled) return;
     try {
       if (!audioContextRef.current) {
@@ -111,12 +170,24 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
       gain.connect(ctx.destination);
 
       if (isSuccess) {
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08); // A5
-        gain.gain.setValueAtTime(0.25, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.25);
+        if (isVip) {
+          // Royal Triple Chime for VIPs
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+          osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.08); // E5
+          osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.16); // G5
+          osc.frequency.setValueAtTime(1046.5, ctx.currentTime + 0.24); // C6
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.45);
+        } else {
+          osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+          osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08); // A5
+          gain.gain.setValueAtTime(0.25, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.25);
+        }
       } else {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(220, ctx.currentTime);
@@ -127,7 +198,7 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
         osc.stop(ctx.currentTime + 0.35);
       }
     } catch (e) {
-      console.warn('Audio playback not allowed yet:', e);
+      console.warn('Audio playback error:', e);
     }
   };
 
@@ -169,6 +240,17 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
         },
         () => {}
       );
+
+      // Check Torch support
+      try {
+        const stream = (html5QrCode as any).localMediaStream as MediaStream;
+        const track = stream?.getVideoTracks()[0];
+        if (track && track.getCapabilities && (track.getCapabilities() as any).torch) {
+          setSupportsTorch(true);
+        }
+      } catch (err) {
+        setSupportsTorch(false);
+      }
     } catch (err) {
       console.error('Error starting camera scanner:', err);
       setIsScanning(false);
@@ -180,9 +262,27 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
       try {
         await scannerRef.current.stop();
         setIsScanning(false);
+        setTorchOn(false);
       } catch (err) {
         console.error('Error stopping camera:', err);
       }
+    }
+  };
+
+  const toggleTorch = async () => {
+    try {
+      if (scannerRef.current) {
+        const stream = (scannerRef.current as any).localMediaStream as MediaStream;
+        const track = stream?.getVideoTracks()[0];
+        if (track && track.applyConstraints) {
+          await track.applyConstraints({
+            advanced: [{ torch: !torchOn } as any],
+          });
+          setTorchOn(!torchOn);
+        }
+      }
+    } catch (err) {
+      console.warn('Torch toggle failed:', err);
     }
   };
 
@@ -210,13 +310,12 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
 
         const data: CheckInRPCResponse = await res.json();
         setLastResult(data);
-        playChirp(data.success);
+        playChirp(data.success, data.is_vip);
 
-        // Auto reset result after 2.5s for continuous fast scanning
         if (data.success) {
           setTimeout(() => {
             setLastResult(null);
-          }, 2500);
+          }, 3000);
         }
       } catch (err: any) {
         handleOfflineVerification(trimmed, type, forceCrossSection);
@@ -245,7 +344,6 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
       return;
     }
 
-    // Cross-section check in offline
     if (!forceCrossSection && gateSection !== 'general') {
       const isWomenPass = cachedPass.section === 'women';
       const isMenPass = cachedPass.section === 'men' || cachedPass.section === 'vip';
@@ -294,9 +392,10 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
       return;
     }
 
-    // Admit offline
     cachedPass.isCheckedIn = true;
     const nowTime = new Date().toLocaleTimeString('ar-SA');
+    const isVip = cachedPass.section === 'vip' || cachedPass.hostName === 'والد العروس';
+
     const resp: CheckInRPCResponse = {
       success: true,
       code: 'SUCCESS',
@@ -305,6 +404,8 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
       section: cachedPass.section,
       table_number: cachedPass.tableNumber,
       host_name: cachedPass.hostName,
+      is_vip: isVip,
+      needs_wheelchair: cachedPass.needsWheelchair,
       check_in_time: nowTime,
       message: cachedPass.tableNumber
         ? `تم التحقق بنجاح • ${cachedPass.tableNumber}`
@@ -312,9 +413,8 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
     };
 
     setLastResult(resp);
-    playChirp(true);
+    playChirp(true, isVip);
 
-    // Queue for sync
     const newQueueItem: OfflineQueuedCheckIn = {
       rawPassToken: trimmed,
       timestamp: new Date().toISOString(),
@@ -328,7 +428,7 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
 
     setTimeout(() => {
       setLastResult(null);
-    }, 2500);
+    }, 3000);
   };
 
   const handleSyncPendingQueue = async () => {
@@ -362,6 +462,43 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
     }
   };
 
+  // PIN Lock Screen
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <form
+          onSubmit={handlePinSubmit}
+          className="w-full max-w-xs bg-slate-900 border border-amber-500/30 rounded-3xl p-6 text-center shadow-2xl space-y-4"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+            <Lock className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-100">بوابة الاستقبال</h2>
+            <p className="text-xs text-slate-400 mt-1">أدخل رمز PIN المصرح للدخول إلى الماسح</p>
+          </div>
+
+          <input
+            type="password"
+            maxLength={6}
+            value={pinInput}
+            onChange={(e) => setPinInput(e.target.value)}
+            placeholder="••••"
+            className="w-full text-center tracking-[0.5em] text-2xl font-mono bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none"
+            autoFocus
+          />
+
+          <button
+            type="submit"
+            className="w-full py-3 gold-gradient-bg text-slate-950 font-bold rounded-xl text-xs shadow-md hover:brightness-110 cursor-pointer"
+          >
+            دخول للماسح 🚀
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 space-y-4">
       {/* Top Header */}
@@ -376,13 +513,30 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
           </h1>
         </div>
 
-        <button
-          onClick={() => setAudioEnabled(!audioEnabled)}
-          className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-amber-400 transition-colors"
-          title={audioEnabled ? 'كتم الصوت' : 'تفعيل صوت التحقق'}
-        >
-          {audioEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Torch Button */}
+          {isScanning && (
+            <button
+              onClick={toggleTorch}
+              className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1 transition-all ${
+                torchOn
+                  ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.6)]'
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-amber-400'
+              }`}
+              title="تشغيل/إطفاء فلاش الإضاءة"
+            >
+              <Flashlight className="w-4 h-4" />
+            </button>
+          )}
+
+          <button
+            onClick={() => setAudioEnabled(!audioEnabled)}
+            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-amber-400 transition-colors"
+            title={audioEnabled ? 'كتم الصوت' : 'تفعيل صوت التحقق'}
+          >
+            {audioEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+          </button>
+        </div>
       </header>
 
       {/* Gate Station & Section Selector */}
@@ -390,7 +544,7 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
         <div className="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
           <span className="font-bold text-slate-300">تحديد نوع البوابة الحالية:</span>
           <span className="text-[10px] text-slate-500 font-mono">
-            {isOfflineMode ? '📵 وضع عدم الاتصال (Offline)' : '🟢 متصل بالسيرفر'}
+            {isOfflineMode ? '📵 وضع عدم الاتصال (Offline)' : '🟢 متصل • الشاشة مضاءة (WakeLock)'}
           </span>
         </div>
 
@@ -481,14 +635,34 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
         {/* Scan Result Feedback Box */}
         {lastResult && (
           <div
-            className={`p-4 rounded-2xl border text-right space-y-2 animate-fadeIn ${
+            className={`p-4 rounded-2xl border text-right space-y-2.5 animate-fadeIn ${
               lastResult.code === 'SUCCESS'
-                ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-100 shadow-[0_0_30px_rgba(16,185,129,0.3)]'
+                ? lastResult.is_vip
+                  ? 'bg-amber-950/90 border-amber-400 text-amber-100 shadow-[0_0_35px_rgba(212,175,55,0.5)]'
+                  : 'bg-emerald-950/70 border-emerald-500/50 text-emerald-100 shadow-[0_0_30px_rgba(16,185,129,0.3)]'
                 : lastResult.code === 'CROSS_SECTION_WARNING'
                 ? 'bg-amber-950/70 border-amber-500/60 text-amber-100 shadow-[0_0_30px_rgba(245,158,11,0.3)]'
                 : 'bg-rose-950/70 border-rose-500/50 text-rose-100 shadow-[0_0_30px_rgba(244,63,94,0.3)]'
             }`}
           >
+            {/* VIP Royal Alert Banner */}
+            {lastResult.is_vip && (
+              <div className="bg-amber-500/20 border border-amber-400/50 p-2 rounded-xl flex items-center justify-between text-xs font-bold text-amber-300">
+                <span className="flex items-center gap-1.5">
+                  <Crown className="w-4 h-4 text-amber-400" />
+                  <span>ضيف من كبار الشخصيات (VIP) • ترحيب خاص 👑</span>
+                </span>
+              </div>
+            )}
+
+            {/* Wheelchair Special Assistance Alert */}
+            {lastResult.needs_wheelchair && (
+              <div className="bg-purple-500/20 border border-purple-400/50 p-2 rounded-xl flex items-center gap-1.5 text-xs font-bold text-purple-200">
+                <Accessibility className="w-4 h-4 text-purple-400" />
+                <span>تنبيه: ضيف يحتاج مساعدة خاصة / عربة تنقل ♿</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {lastResult.code === 'SUCCESS' ? (
