@@ -1,5 +1,5 @@
 # 🏛️ المعمارية التقنية وهندسة النظم (System Architecture)
-### منظومة WeddingPass v5.8 (Enterprise Architecture)
+### منظومة WeddingPass v5.9.1 (Enterprise Production Architecture)
 
 ---
 
@@ -102,3 +102,11 @@ graph TD
 2. تتم مطابقة الباركود الممسوح محلياً في زمن `<5ms`.
 3. يُسجل الدخول محلياً ويُضاف السجل إلى **Pending Queue** مع توثيق `device_scanned_at`.
 4. فور عودة الشبكة، تُرسل حزمة العمليات المعلقة بنقرة واحدة إلى السيرفر، الذي يوثق `server_synced_at` لمنع التلاعب بسجلات التوقيت.
+
+---
+
+## ⚡ 5. معمارية الزرع الذاتي والتحصين السحابي (Zero-Crash Auto-Seeding & Cloud Layer)
+
+1. **الزرع الذاتي التلقائي (Auto-Seeding Engine):** يتولى كود `SupabaseRepository` رصد الجداول والبيانات الناقصة في Supabase تلقائياً وزرع الفعالية الافتراضية عند تشغيل المنصة دون الحاجة لأي تدخل يدوي أو كتابة أكواد SQL.
+2. **شاشة القفل المشفرة للمشرف (Admin Gatekeeper):** عزل واجهة الإدارة `/admin` بحاجز أمان يطلب رمز PIN الإداري وتوثيق الجلسة في المتصفح، مع زر إغلاق فوري لقفل اللوحة.
+3. **التكامل السحابي لعام 2026 (Vercel Serverless + Supabase Postgres):** ترقية المعمارية لتعمل بسلاسة عبر Vercel Edge مع مزامنة لحظية في PostgreSQL.

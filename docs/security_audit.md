@@ -104,6 +104,14 @@ if (isOverrideRequested && session.role !== 'supervisor') {
 }
 ```
 
+### 6. حماية لوحة التحكم الإدارية بشاشة قفل مشفرة (`components/AdminDashboard.tsx`)
+```typescript
+// Master Admin PIN Lock Screen with Session Isolation
+if (mounted && !isAdminAuthenticated) {
+  return <AdminLockScreen onSubmit={handleAdminPinSubmit} />;
+}
+```
+
 ---
 
 ## 🧪 3. نتائج التحقق والاختبارات الميدانية
@@ -111,4 +119,13 @@ if (isOverrideRequested && session.role !== 'supervisor') {
 1. **حزمة اختبارات الوحدة والجودة (`tests/qa_runner.mjs`):** 40/40 فحصاً ناجحاً بنسبة 100%.
 2. **حزمة اختبارات التزامن والسباق (`tests/concurrency_test.mjs`):** 5/5 اختبارات سباق ناجحة تحت ضغط 100 طلب متزامن.
 3. **حزمة اختبارات البروتوكول والـ HTTP (`tests/http_concurrency_test.mjs`):** 3/3 اختبارات سلامة بروتوكول ناجحة.
-4. **البناء السحابي للإنتاج (`npm run build`):** اجتياز كامل لكافة المسارات الـ 18 بدون أي أخطاء.
+4. **الفاحص السحابي المباشر للإنتاج (`scratch/cloud_live_tester.mjs`):** فحص كافة سيناريوهات الخادم السحابي الحي على Vercel و Supabase.
+5. **البناء السحابي للإنتاج (`npm run build`):** اجتياز كامل لكافة المسارات الـ 18 بدون أي أخطاء.
+
+---
+
+## 🔐 4. إضافات الأمان والتحصين السحابي (v5.9.1 Update)
+
+* **شاشة القفل الإداري (Admin PIN Gatekeeper):** حجب واجهة `/admin` بطلب رمز PIN المشفر قبل عرض أي تفاصيل للضيوف أو الإعدادات، مع توفير زر قفل الجلسة الفوري (Logout) لحماية بيانات المالك.
+* **الزرع الذاتي الآمن (Zero-Crash Auto-Seeding):** استبدال استعلامات `.single()` المشددة بـ `.maybeSingle()` والاستعلامات الآمنة، مما يمنع تعطل خوادم Next.js (500 Error) عند تهيئة الفعاليات الجديدة في Supabase.
+* **تطهير الرموز التعبيرية للواتساب (Unicode Sanitization):** إزالة رموز الـ ZWJ المعقدة التي تسبب تشوهات بصرية وعلامات استفهام في أجهزة أندرويد لضمان وصول الرابط المخصص لكل ضيف بوضوح وأمان.
