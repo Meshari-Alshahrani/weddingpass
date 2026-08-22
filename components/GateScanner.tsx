@@ -286,9 +286,9 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
     }
   };
 
-  const handleCheckIn = async (token: string, type: CheckInType = 'QR_SCAN', forceCrossSection: boolean = false) => {
+  const handleCheckIn = async (token: string, type: CheckInType = 'QR_SCAN', forceCrossSection: boolean = false, overrideCount?: number) => {
     const trimmed = token.trim();
-    if (!trimmed) return;
+    if (!trimmed || loading) return; // Debounce guard
 
     setLoading(true);
     const isOnline = navigator.onLine && !isOfflineMode;
@@ -303,6 +303,7 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
             stationName,
             operatorName,
             checkinType: type,
+            overrideCount,
             gateSection,
             forceCrossSection,
           }),
@@ -312,23 +313,23 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
         setLastResult(data);
         playChirp(data.success, data.is_vip);
 
-        if (data.success) {
+        if (data.success && !overrideCount) {
           setTimeout(() => {
             setLastResult(null);
-          }, 3000);
+          }, 3500);
         }
       } catch (err: any) {
-        handleOfflineVerification(trimmed, type, forceCrossSection);
+        handleOfflineVerification(trimmed, type, forceCrossSection, overrideCount);
       } finally {
         setLoading(false);
       }
     } else {
-      handleOfflineVerification(trimmed, type, forceCrossSection);
+      handleOfflineVerification(trimmed, type, forceCrossSection, overrideCount);
       setLoading(false);
     }
   };
 
-  const handleOfflineVerification = (trimmed: string, type: CheckInType, forceCrossSection: boolean) => {
+  const handleOfflineVerification = (trimmed: string, type: CheckInType, forceCrossSection: boolean, overrideCount?: number) => {
     const cachedPass = offlineCache.find(
       (p) => p.rawPassToken === trimmed || p.passTokenHash.includes(trimmed)
     );
@@ -686,11 +687,33 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
                 </div>
               </div>
 
-              {lastResult.admitted_count && (
+              {lastResult.code === 'SUCCESS' && lastResult.admitted_count !== undefined ? (
+                <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-xl border border-emerald-500/40">
+                  <button
+                    type="button"
+                    onClick={() => handleCheckIn(manualToken || '', 'MANUAL_SEARCH', false, Math.max(1, (lastResult.admitted_count || 1) - 1))}
+                    className="w-5 h-5 rounded bg-slate-800 text-slate-200 text-xs font-bold flex items-center justify-center hover:bg-slate-700 cursor-pointer"
+                    title="تقليل عدد الواصلين الفعلي"
+                  >
+                    -
+                  </button>
+                  <span className="text-xs font-extrabold text-emerald-300 px-1">
+                    {lastResult.admitted_count} أفراد
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCheckIn(manualToken || '', 'MANUAL_SEARCH', false, (lastResult.admitted_count || 1) + 1)}
+                    className="w-5 h-5 rounded bg-slate-800 text-slate-200 text-xs font-bold flex items-center justify-center hover:bg-slate-700 cursor-pointer"
+                    title="زيادة عدد الواصلين الفعلي"
+                  >
+                    +
+                  </button>
+                </div>
+              ) : lastResult.admitted_count ? (
                 <span className="text-xs font-extrabold px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-full border border-emerald-500/40">
                   {lastResult.admitted_count} أفراد
                 </span>
-              )}
+              ) : null}
             </div>
 
             {/* Table Number Display */}

@@ -488,20 +488,27 @@ ${inviteUrl}
     }
   };
 
+  const sanitizeExcelCell = (val: any) => {
+    if (typeof val === 'string' && /^[=+@-]/i.test(val.trim())) {
+      return `'${val}`;
+    }
+    return val;
+  };
+
   const handleExportAttendanceExcel = () => {
     const exportData = filteredParties.map((p) => ({
-      'اسم المدعو': p.party_name,
-      'الداعي': p.host_name || 'العريس',
-      'رقم الطاولة': p.table_number || 'عام',
-      'المجموعة / القروب': p.group_name || 'دعوة خاصة',
-      'رقم الجوال': p.primary_phone || '',
+      'اسم المدعو': sanitizeExcelCell(p.party_name),
+      'الداعي': sanitizeExcelCell(p.host_name || 'العريس'),
+      'رقم الطاولة': sanitizeExcelCell(p.table_number || 'عام'),
+      'المجموعة / القروب': sanitizeExcelCell(p.group_name || 'دعوة خاصة'),
+      'رقم الجوال': sanitizeExcelCell(p.primary_phone || ''),
       'القسم': p.section === 'men' ? 'رجال' : p.section === 'women' ? 'نساء' : p.section,
       'العدد المسموح': p.allowed_count,
       'العدد المؤكد': p.confirmed_count,
       'العدد الفعلي الواصل': p.actual_checked_in_count,
       'حالة الـ RSVP': p.rsvp_status === 'confirmed' ? 'أكد الحضور' : p.rsvp_status === 'declined' ? 'اعتذر' : 'لم يرد',
       'حالة الدخول': p.actual_checked_in_count > 0 ? 'تم الدخول ✅' : 'لم يدخل',
-      'ملاحظات': p.notes || '',
+      'ملاحظات': sanitizeExcelCell(p.notes || ''),
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);

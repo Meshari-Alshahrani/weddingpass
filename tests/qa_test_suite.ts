@@ -220,7 +220,7 @@ async function runQASuite() {
   assert(stats.hostStats.length === 4, 'Computes stats for all 4 hosts (العريس، والد العريس، والد العروس، قسم النساء)');
   
   const groomStats = stats.hostStats.find((h: any) => h.hostName === 'العريس');
-  assert(groomStats.totalInvites > 0, 'Computes groom specific invites and attendance correctly');
+  assert(Boolean(groomStats && groomStats.totalInvites > 0), 'Computes groom specific invites and attendance correctly');
 
   // --------------------------------------------------------------------------
   // SECTION 10: Event Settings & Gate PIN Security
