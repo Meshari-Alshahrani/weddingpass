@@ -1,6 +1,9 @@
 import { getDefaultEvent, getAllParties } from '@/lib/db/store';
 import { ManifestView } from '@/components/ManifestView';
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export default async function EmergencyManifestPage() {
   const event = await getDefaultEvent();
   const allParties = await getAllParties(event.id);

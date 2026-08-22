@@ -4,6 +4,9 @@ import { notFound } from 'next/navigation';
 import { AlertCircle, Search } from 'lucide-react';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 interface PageProps {
   params: Promise<{ token: string }>;
 }

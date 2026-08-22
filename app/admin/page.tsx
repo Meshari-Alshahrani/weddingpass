@@ -9,6 +9,9 @@ import {
 } from '@/lib/db/store';
 import { AdminDashboard } from '@/components/AdminDashboard';
 
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
 export default async function AdminPage() {
   const event = await getDefaultEvent();
   const parties = await getAllParties(event.id);

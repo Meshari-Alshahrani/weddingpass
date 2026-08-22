@@ -232,7 +232,36 @@ BEGIN
 END;
 $$;
 
+-- ------------------------------------------------------------------------------
+-- 7. تحصين مسار البحث (PostgreSQL search_path Hijacking Defense)
+-- ------------------------------------------------------------------------------
+ALTER FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT) SET search_path = public, pg_temp;
+
 -- تشديد أمان الصلاحيات
 REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT) FROM public;
 REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT) FROM anon;
 GRANT EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT) TO authenticated, service_role;
+
+-- ------------------------------------------------------------------------------
+-- 8. حظر تسريب بيانات الضيوف عبر Supabase Realtime
+-- ------------------------------------------------------------------------------
+-- حصر البث الحي حصراً على جدول تبريكات القاعة وتعطيله عن الجداول الحساسة
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS public.parties;
+        ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS public.entry_passes;
+        ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS public.check_in_logs;
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.wishes;
+    END IF;
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 9. سياسات أمان سلة التخزين (Supabase Storage RLS Lockdown)
+-- ------------------------------------------------------------------------------
+-- سياسات سلة moments لمنع الحذف والتعديل من غير المنظم
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('moments', 'moments', true) ON CONFLICT DO NOTHING;
+-- CREATE POLICY "Public read approved moments" ON storage.objects FOR SELECT USING (bucket_id = 'moments');
+-- CREATE POLICY "Guests insert moments" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'moments');
+-- CREATE POLICY "Service role only delete moments" ON storage.objects FOR DELETE USING (auth.role() = 'service_role');
+
