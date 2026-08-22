@@ -369,13 +369,18 @@ ${link}
     const inviteUrl = `${originUrl || ''}/i/${rawToken}`;
     const cleanPhone = party.primary_phone?.replace(/[^0-9]/g, '') || '';
 
-    const message = `السلام عليكم ورحمة الله وبركاته 🌹
-يسرنا ويشرفنا دعوتكم لحفل زفاف ${event.groom_name} و ${event.bride_name}.
+    const message = `﷽
 
-للاطلاع على تفاصيل الدعوة وتأكيد الحضور وتوليد بطاقة الدخول الخاصة بكم:
-${inviteUrl}
+أهلاً بك يا *${party.party_name}* 🌹
+يسرنا ويسعدنا دعوتكم لمشاركتنا فرحة حفل زفاف:
+👰🏻‍♀️ *${event.bride_name}*  &  🤵🏻‍♂️ *${event.groom_name}*
 
-نسعد ونتشرف بحضوركم الكريم ✨`;
+بطاقتكم الخاصة وتفاصيل الحفل عبر الرابط التفاعلي:
+🔗 ${inviteUrl}
+
+⚠️ _نرجو تأكيد حضوركم عبر الرابط لإصدار بطاقة الدخول الذكية (QR) الخاصة بكم عند البوابة._
+
+*حضوركم يزدان به حفلنا ويسعدنا تشريفكم 🌹*`;
 
     const waUrl = cleanPhone
       ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`

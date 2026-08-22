@@ -74,8 +74,10 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const wakeLockRef = useRef<any>(null);
+  const undoTimerRef = useRef<any>(null);
 
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [undoToast, setUndoToast] = useState<{ partyName: string; tableNumber?: string | null; admittedCount?: number } | null>(null);
 
   // 1. PIN Auth Check via Verified Server Session
   useEffect(() => {
@@ -91,6 +93,18 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
     if (!pinInput.trim()) return;
     setLoading(true);
     try {
+      // Initialize/resume Web Audio API context upon user gesture for iOS Safari compatibility
+      try {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        if (audioContextRef.current?.state === 'suspended') {
+          audioContextRef.current.resume();
+        }
+      } catch (audioErr) {
+        console.warn('AudioContext init warning:', audioErr);
+      }
+
       const res = await fetch('/api/gate/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -179,12 +193,29 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
   }, [initialEvent.id]);
 
   const playChirp = (isSuccess: boolean, isVip: boolean = false) => {
+    // Haptic vibration feedback for mobile devices
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        if (isSuccess) {
+          if (isVip) navigator.vibrate([100, 50, 100, 50, 150]);
+          else navigator.vibrate(60);
+        } else {
+          navigator.vibrate([150, 80, 150]);
+        }
+      } catch (hapticErr) {
+        console.warn('Haptic feedback warning:', hapticErr);
+      }
+    }
+
     if (!audioEnabled) return;
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       const ctx = audioContextRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -346,6 +377,18 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
         const data: CheckInRPCResponse = await res.json();
         setLastResult(data);
         playChirp(data.success, data.is_vip);
+
+        if (data.success && data.party_name) {
+          if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+          setUndoToast({
+            partyName: data.party_name,
+            tableNumber: data.table_number,
+            admittedCount: data.admitted_count || 1,
+          });
+          undoTimerRef.current = setTimeout(() => {
+            setUndoToast(null);
+          }, 5000);
+        }
 
         if (data.success && !overrideCount) {
           setTimeout(() => {
@@ -799,6 +842,36 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
           </div>
         </div>
       </main>
+
+      {/* 5-Second Floating Undo Toast */}
+      {undoToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md bg-slate-900/95 border-2 border-emerald-500/60 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex items-center justify-between text-right animate-bounce">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-bold text-xs">
+              ✓
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-100">
+                تم تسجيل دخول: <span className="text-emerald-300 font-extrabold">{undoToast.partyName}</span>
+              </p>
+              <p className="text-[10px] text-slate-400">
+                {undoToast.tableNumber ? `طاولة: ${undoToast.tableNumber} • ` : ''}العدد: {undoToast.admittedCount}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+              setUndoToast(null);
+              setLastResult(null);
+            }}
+            className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold border border-slate-700 cursor-pointer shadow-md"
+          >
+            تراجع ↩
+          </button>
+        </div>
+      )}
     </div>
   );
 }

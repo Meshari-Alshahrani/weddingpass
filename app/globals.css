@@ -1,27 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --font-arabic-heading: 'Amiri', serif;
-  --font-arabic-body: 'Tajawal', 'Cairo', sans-serif;
+  --font-arabic-heading: 'Alexandria', sans-serif;
+  --font-arabic-verse: 'Amiri', serif;
+  --font-arabic-ruqaa: 'Aref Ruqaa', serif;
+  --font-arabic-body: 'IBM Plex Sans Arabic', system-ui, -apple-system, sans-serif;
   --gold-primary: #D4AF37;
   --gold-secondary: #AA771C;
   --gold-light: #F3E5AB;
 }
 
 body {
-  font-family: var(--font-arabic-body), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-arabic-body);
   direction: rtl;
   text-align: right;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-.font-heading {
-  font-family: var(--font-arabic-heading), serif;
+.font-heading, .font-royal-heading {
+  font-family: var(--font-arabic-heading);
 }
 
-.font-body {
-  font-family: var(--font-arabic-body), sans-serif;
+.font-verse, .font-serif {
+  font-family: var(--font-arabic-verse);
+}
+
+.font-ruqaa {
+  font-family: var(--font-arabic-ruqaa);
+}
+
+.font-data, .font-body, .font-sans {
+  font-family: var(--font-arabic-body);
 }
 
 /* Luxury Gold Foil & Shimmer Effects */

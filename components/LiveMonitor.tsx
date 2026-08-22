@@ -14,6 +14,7 @@ import {
   Home,
   MessageSquareHeart,
   Heart,
+  Maximize,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -53,6 +54,16 @@ export function LiveMonitor({ initialEvent, initialStats, initialLogs, initialWi
     return () => clearInterval(interval);
   }, []);
 
+  const toggleFullscreen = () => {
+    if (typeof document !== 'undefined') {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(console.error);
+      } else {
+        document.exitFullscreen().catch(console.error);
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 sm:p-10 flex flex-col justify-between space-y-6">
       {/* Top Banner */}
@@ -60,7 +71,7 @@ export function LiveMonitor({ initialEvent, initialStats, initialLogs, initialWi
         <div className="flex items-center gap-3">
           <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-ping" />
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold font-serif gold-gradient-text">
+            <h1 className="text-xl sm:text-2xl font-bold font-royal-heading gold-gradient-text">
               شاشة المراقبة المباشرة للحضور • حفل زفاف {initialEvent.groom_name} & {initialEvent.bride_name}
             </h1>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -70,6 +81,16 @@ export function LiveMonitor({ initialEvent, initialStats, initialLogs, initialWi
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="py-2 px-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-xs font-bold text-amber-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="تفعيل وضع ملء الشاشة للعرض على شاشات القاعة"
+          >
+            <Maximize className="w-4 h-4 text-amber-400" />
+            <span>ملء الشاشة 📺</span>
+          </button>
+
           <Link
             href="/"
             className="py-2 px-3.5 rounded-xl bg-slate-900 border border-slate-700 hover:bg-slate-800 text-xs font-semibold text-slate-300 flex items-center gap-1.5 transition-colors"

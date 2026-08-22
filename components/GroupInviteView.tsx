@@ -218,9 +218,9 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-serif text-amber-300/80">بِسْمِ اللَّـهِ الرَّحْمَـٰنِ الرَّحِيمِ</p>
+            <p className="text-xs font-verse text-amber-300/80">بِسْمِ اللَّـهِ الرَّحْمَـٰنِ الرَّحِيمِ</p>
             {event.welcome_verse && (
-              <p className="text-xs text-amber-200/70 font-serif leading-relaxed px-2">
+              <p className="text-xs text-amber-200/70 font-verse leading-relaxed px-2">
                 &ldquo;{event.welcome_verse}&rdquo;
               </p>
             )}
@@ -235,7 +235,7 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
               <img
                 src={event.invitation_image_url}
                 alt="بطاقة الدعوة"
-                className="w-full h-auto object-cover max-h-[380px]"
+                className="w-full h-auto object-contain max-h-[500px]"
               />
             </div>
           ) : (
@@ -244,15 +244,15 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
                 نتشرف بدعوتكم لحفل زفاف
               </p>
               <div className="flex items-center justify-center gap-3 my-1">
-                <h1 className="text-2xl font-bold font-serif gold-gradient-text">
+                <h1 className="text-2xl sm:text-3xl font-bold font-royal-heading gold-gradient-text">
                   {event.groom_name}
                 </h1>
                 <Heart className="w-5 h-5 text-amber-400 fill-amber-400/20 animate-pulse" />
-                <h1 className="text-2xl font-bold font-serif gold-gradient-text">
+                <h1 className="text-2xl sm:text-3xl font-bold font-royal-heading gold-gradient-text">
                   {event.bride_name}
                 </h1>
               </div>
-              <p className="text-xs text-amber-200/60 font-serif">
+              <p className="text-xs text-amber-200/60 font-verse">
                 وذلك بمشيئة الله تعالى وتوفيقه
               </p>
             </div>
@@ -466,13 +466,14 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
                 </label>
                 <input
                   type="tel"
+                  inputMode="numeric"
                   name="tel"
                   autoComplete="tel"
                   required
                   value={guestPhone}
                   onChange={(e) => setGuestPhone(e.target.value)}
                   placeholder="05XXXXXXXX"
-                  className="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400 font-mono text-left"
+                  className="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400 font-mono text-left font-data"
                   dir="ltr"
                 />
               </div>

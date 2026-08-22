@@ -57,6 +57,7 @@ export function LuxuryInvitation({
   // Modals state
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [isImageLightboxOpen, setIsImageLightboxOpen] = useState(false);
   const [ibanCopied, setIbanCopied] = useState(false);
 
   const isWomen = party.section === 'women';
@@ -256,12 +257,29 @@ export function LuxuryInvitation({
 
           {/* Custom Card Image (If provided) */}
           {event.invitation_image_url ? (
-            <div className="my-3 rounded-2xl overflow-hidden border border-amber-500/30 shadow-2xl">
-              <img
-                src={event.invitation_image_url}
-                alt="بطاقة الدعوة"
-                className="w-full h-auto object-cover max-h-[380px]"
-              />
+            <div className="my-3 space-y-1.5">
+              <div
+                onClick={() => setIsImageLightboxOpen(true)}
+                className="relative rounded-2xl overflow-hidden border border-amber-500/30 shadow-2xl cursor-pointer group"
+              >
+                <img
+                  src={event.invitation_image_url}
+                  alt="بطاقة الدعوة الرسمية"
+                  className="w-full h-auto object-contain max-h-[500px] transition-transform duration-300 group-hover:scale-[1.02]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-3">
+                  <span className="text-[11px] bg-slate-900/90 text-amber-300 px-3 py-1 rounded-full border border-amber-500/40 shadow-lg font-bold">
+                    🔍 انقر لتكبير البطاقة بملء الشاشة
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsImageLightboxOpen(true)}
+                className="text-[11px] text-amber-400/80 hover:text-amber-300 flex items-center justify-center gap-1 mx-auto cursor-pointer"
+              >
+                <span>🔍 تكبير كرت الدعوة</span>
+              </button>
             </div>
           ) : (
             <div className="my-4 space-y-2">
@@ -269,15 +287,15 @@ export function LuxuryInvitation({
                 نتشرف بدعوتكم لحفل زفاف
               </p>
               <div className="flex items-center justify-center gap-3 my-1">
-                <h1 className="text-2xl font-bold font-serif gold-gradient-text">
+                <h1 className="text-2xl sm:text-3xl font-bold font-royal-heading gold-gradient-text">
                   {event.groom_name}
                 </h1>
                 <Heart className="w-5 h-5 text-amber-400 fill-amber-400/20 animate-pulse" />
-                <h1 className="text-2xl font-bold font-serif gold-gradient-text">
+                <h1 className="text-2xl sm:text-3xl font-bold font-royal-heading gold-gradient-text">
                   {event.bride_name}
                 </h1>
               </div>
-              <p className="text-xs text-amber-200/60 font-serif">
+              <p className="text-xs text-amber-200/60 font-verse">
                 وذلك بمشيئة الله تعالى وتوفيقه
               </p>
             </div>
@@ -484,6 +502,20 @@ export function LuxuryInvitation({
               </div>
             )}
 
+            {/* Modify RSVP Option */}
+            <div className="text-center pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setRsvpStatus('viewed');
+                  setActiveAction('attending');
+                }}
+                className="text-xs text-amber-400/90 hover:text-amber-300 underline font-semibold flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
+              >
+                <span>🔄 تعديل خيار الحضور أو عدد المرافقين</span>
+              </button>
+            </div>
+
             {/* Wishes Input */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-right space-y-2">
               <label className="text-xs font-semibold text-amber-300/90 flex items-center gap-1.5">
@@ -496,7 +528,7 @@ export function LuxuryInvitation({
                   value={wishText}
                   onChange={(e) => setWishText(e.target.value)}
                   placeholder="بارك الله لكما وبارك عليكما وجمع بينكما في خير..."
-                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400 font-sans"
                 />
                 <button
                   onClick={handleSendWishOnly}
@@ -821,6 +853,29 @@ export function LuxuryInvitation({
                 إغلاق
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Lightbox Fullscreen Modal */}
+      {isImageLightboxOpen && event.invitation_image_url && (
+        <div
+          className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-4"
+          onClick={() => setIsImageLightboxOpen(false)}
+        >
+          <div className="relative max-w-lg w-full max-h-[90vh] flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => setIsImageLightboxOpen(false)}
+              className="absolute -top-12 left-0 py-1.5 px-4 rounded-full bg-slate-800 text-amber-300 text-xs font-bold border border-amber-500/40 hover:bg-slate-700 cursor-pointer shadow-lg"
+            >
+              ✕ إغلاق
+            </button>
+            <img
+              src={event.invitation_image_url}
+              alt="بطاقة الدعوة الرسمية"
+              className="max-h-[85vh] w-auto object-contain rounded-2xl border border-amber-500/40 shadow-2xl"
+            />
           </div>
         </div>
       )}
