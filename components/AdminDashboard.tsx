@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { WeddingEvent, Party, CheckInLog, GroupInviteLink, GroupLimitMode, Wish, EventMoment, HostRole } from '@/types/database';
 import * as XLSX from 'xlsx';
 import {
@@ -131,6 +131,45 @@ export function AdminDashboard({
   // Inline Table Edit Modal
   const [editingTableParty, setEditingTableParty] = useState<Party | null>(null);
   const [tableInput, setTableInput] = useState('');
+
+  const invitationFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Client-side image compression for invitation card
+  const handleInvitationFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        const maxDim = 1600;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/webp', 0.88);
+        setEditImageUrl(dataUrl);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -1734,21 +1773,73 @@ ${inviteUrl}
                 />
               </div>
 
-              <div className="p-4 bg-slate-950 rounded-2xl border border-amber-500/20 space-y-2">
-                <div className="flex items-center gap-2 text-amber-300 font-bold">
-                  <ImageIcon className="w-4 h-4" />
-                  <span>صورة أو تصميم بطاقة الدعوة (اختياري)</span>
+              <div className="p-4 bg-slate-950 rounded-2xl border border-amber-500/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                    <ImageIcon className="w-4 h-4 text-amber-400" />
+                    <span>صورة أو تصميم بطاقة الدعوة (اختياري)</span>
+                  </div>
+                  {editImageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setEditImageUrl('')}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>إزالة الصورة</span>
+                    </button>
+                  )}
                 </div>
+
                 <p className="text-[11px] text-slate-400">
-                  إذا صممت كرت دعوة في Canva أو لديك صورة مصممة، ضع رابط الصورة هنا لتظهر داخل صفحة الدعوة بدلاً من النص العادي:
+                  يمكنك رفع صورة تصميم كرت الدعوة مباشرة من جهازك (Canva أو فوتوشوب) أو وضع رابط خارجي:
                 </p>
+
+                {/* Direct Device File Upload */}
                 <input
-                  type="text"
-                  value={editImageUrl}
-                  onChange={(e) => setEditImageUrl(e.target.value)}
-                  placeholder="https://example.com/my-wedding-invitation.png أو رابط الصورة"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400"
+                  type="file"
+                  ref={invitationFileInputRef}
+                  onChange={handleInvitationFileSelect}
+                  accept="image/*"
+                  className="hidden"
                 />
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => invitationFileInputRef.current?.click()}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:scale-[1.01]"
+                  >
+                    <Upload className="w-4 h-4 text-amber-400" />
+                    <span>📁 رفع صورة التصميم من جهازك (PNG / JPG)</span>
+                  </button>
+                </div>
+
+                {/* Live Card Preview */}
+                {editImageUrl && (
+                  <div className="relative rounded-2xl overflow-hidden border border-amber-500/40 bg-slate-900/90 shadow-xl max-h-[220px] flex items-center justify-center p-2">
+                    <img
+                      src={editImageUrl}
+                      alt="معاينة بطاقة الدعوة"
+                      className="max-h-[200px] w-auto object-contain rounded-xl shadow-md"
+                    />
+                    <div className="absolute top-3 right-3 px-2 py-1 rounded-md bg-slate-950/80 border border-amber-500/40 text-[10px] font-bold text-amber-300 backdrop-blur-sm">
+                      ✓ تم تحميل التصميم بنجاح
+                    </div>
+                  </div>
+                )}
+
+                {/* Optional URL input */}
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">أو ضع رابط صورة مباشر:</label>
+                  <input
+                    type="text"
+                    value={editImageUrl}
+                    onChange={(e) => setEditImageUrl(e.target.value)}
+                    placeholder="https://example.com/my-wedding-invitation.png أو data:image/..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
               </div>
 
               <div>
