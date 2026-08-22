@@ -225,11 +225,14 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
 
   const fetchOfflineCache = async () => {
     try {
-      const res = await fetch(`/api/join?dumpCache=${initialEvent.id}`);
+      const res = await fetch('/api/gate/cache', {
+        credentials: 'include',
+        headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+      });
       const data = await res.json();
-      if (data.success && data.cache) {
-        setOfflineCache(data.cache);
-        localStorage.setItem(`weddingpass_offline_cache_${initialEvent.id}`, JSON.stringify(data.cache));
+      if (data.success && data.records) {
+        setOfflineCache(data.records);
+        localStorage.setItem(`weddingpass_offline_cache_${initialEvent.id}`, JSON.stringify(data.records));
       }
     } catch (e) {
       const saved = localStorage.getItem(`weddingpass_offline_cache_${initialEvent.id}`);
@@ -318,18 +321,27 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
       try {
         const res = await fetch('/api/checkin', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+          },
           body: JSON.stringify({
             token: trimmed,
-            gateSessionToken: sessionToken,
-            stationName,
-            operatorName,
             checkinType: type,
             overrideCount,
-            gateSection,
             forceCrossSection,
           }),
         });
+
+        if (res.status === 401) {
+          setIsAuthenticated(false);
+          setSessionToken(null);
+          sessionStorage.removeItem(`weddingpass_gate_session_${initialEvent.id}`);
+          alert('انتهت جلسة البوابة المشفرة أو أنها غير مصرحة. يرجى إعادة إدخال رمز الـ PIN.');
+          setLoading(false);
+          return;
+        }
 
         const data: CheckInRPCResponse = await res.json();
         setLastResult(data);

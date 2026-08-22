@@ -20,9 +20,20 @@ import {
   deleteMoment,
   updatePartyTableNumber,
 } from '@/lib/db/store';
+import { getVerifiedAdminSession } from '@/lib/security/adminAuth';
+import { checkRateLimit } from '@/lib/security/rateLimiter';
 
 export async function GET(req: NextRequest) {
   try {
+    // 1. Mandatory Admin Authentication
+    const adminSession = await getVerifiedAdminSession(req);
+    if (!adminSession) {
+      return NextResponse.json(
+        { success: false, code: 'UNAUTHORIZED', message: 'جلسة المشرف غير مصرحة أو منتهية' },
+        { status: 401 }
+      );
+    }
+
     const event = await getDefaultEvent();
     const parties = await getAllParties(event.id);
     const stats = await getEventStats(event.id);
@@ -48,11 +59,21 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
+    const rateLimit = checkRateLimit(`admin_api_${ip}`, 60, 60000);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { success: false, code: 'RATE_LIMIT_EXCEEDED', message: 'تم تجاوز معدل الطلبات المسموح' },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const { action } = body;
 
     const event = await getDefaultEvent();
 
+    // Public Guest Actions: Adding a moment or wish with quarantine
     if (action === 'add_moment') {
       const { uploaderName, mediaUrl, caption, section, uploaderPhone } = body;
       if (!mediaUrl) {
@@ -71,6 +92,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, moment, message: 'تم إرسال الصورة للمراجعة والاعتماد بنجاح' });
     }
 
+    if (action === 'add_wish') {
+      const { partyName, message, partyId } = body;
+      if (!message || !partyName) {
+        return NextResponse.json({ success: false, message: 'بيانات التهنئة غير مكتملة' }, { status: 400 });
+      }
+
+      const wish = await addWish(event.id, partyName, message, partyId, true);
+      return NextResponse.json({ success: true, wish, message: 'تم إرسال التهنئة بنجاح' });
+    }
+
+    // Privileged Administrative Actions: Require Valid Admin Session
+    const adminSession = await getVerifiedAdminSession(req);
+    if (!adminSession) {
+      return NextResponse.json(
+        { success: false, code: 'UNAUTHORIZED', message: 'تنفيذ هذا الإجراء يتطلب جلسة مشرف موثقة' },
+        { status: 401 }
+      );
+    }
+
     if (action === 'toggle_moment_approval') {
       const { momentId, isApproved } = body;
       const ok = await toggleMomentApproval(momentId, isApproved);
@@ -87,16 +127,6 @@ export async function POST(req: NextRequest) {
       const { partyId, tableNumber } = body;
       const ok = await updatePartyTableNumber(partyId, tableNumber);
       return NextResponse.json({ success: ok });
-    }
-
-    if (action === 'add_wish') {
-      const { partyName, message, partyId } = body;
-      if (!message || !partyName) {
-        return NextResponse.json({ success: false, message: 'بيانات التهنئة غير مكتملة' }, { status: 400 });
-      }
-
-      const wish = await addWish(event.id, partyName, message, partyId, true);
-      return NextResponse.json({ success: true, wish, message: 'تم إرسال التهنئة بنجاح' });
     }
 
     if (action === 'toggle_wish_approval') {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeCheckIn, searchParties, getDefaultEvent } from '@/lib/db/store';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { getVerifiedGateSession } from '@/lib/security/gateAuth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,44 +14,60 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 1. MANDATORY GATE AUTHENTICATION ENFORCEMENT
+    const session = await getVerifiedGateSession(req);
+    if (!session) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'UNAUTHORIZED',
+          message: 'جلسة البوابة غير مصرحة أو منتهية. يرجى تسجيل الدخول برمز PIN أولاً.',
+        },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
-    const { token, passToken, gateSessionToken, stationName, operatorName, checkinType, overrideCount, gateSection, forceCrossSection } = body;
+    const { token, passToken, checkinType, overrideCount, forceCrossSection } = body;
 
     const rawToken = token || passToken;
-    if (!rawToken) {
+    if (!rawToken || typeof rawToken !== 'string') {
       return NextResponse.json(
         { success: false, code: 'INVALID_REQUEST', message: 'يرجى تقديم رمز بطاقة الدخول' },
         { status: 400 }
       );
     }
 
-    const event = await getDefaultEvent();
-    let station = stationName || 'بوابة الاستقبال 1';
-    let operator = operatorName || 'مشغل البوابة';
-    let section = gateSection || 'men';
+    // 2. Derive Operator & Station STRICTLY from Verified Server Session
+    const station = session.stationName;
+    const operator = session.operatorName;
+    const section = session.gateSection;
 
-    // Verify Server-Side Gate Session if present
-    if (gateSessionToken) {
-      const { verifyGateSessionToken } = await import('@/lib/security/gateAuth');
-      const verified = await verifyGateSessionToken(gateSessionToken);
-      if (verified) {
-        station = verified.stationName;
-        operator = verified.operatorName;
-        section = verified.gateSection;
-      }
+    // 3. Supervisor-Only Cross-Section Override Governance
+    const isOverrideRequested = Boolean(forceCrossSection);
+    if (isOverrideRequested && session.role !== 'supervisor') {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'SUPERVISOR_REQUIRED',
+          message: 'تجاوز تحذير القسم يتطلب موافقة واعتماد المشرف العام للبوابات.',
+        },
+        { status: 403 }
+      );
     }
 
     const type = checkinType === 'MANUAL_SEARCH' ? 'MANUAL_SEARCH' : 'QR_SCAN';
 
+    // 4. Atomic Execution
     const result = await executeCheckIn(
-      event.id,
+      session.eventId,
       rawToken,
       station,
       operator,
       type,
       overrideCount,
       section,
-      Boolean(forceCrossSection)
+      isOverrideRequested
     );
 
     return NextResponse.json(result);
@@ -64,15 +81,23 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    // Gate session required for manual search lookups
+    const session = await getVerifiedGateSession(req);
+    if (!session) {
+      return NextResponse.json(
+        { success: false, code: 'UNAUTHORIZED', message: 'جلسة البوابة غير مصرحة' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('query');
 
-    const event = await getDefaultEvent();
-    if (!query) {
-      return NextResponse.json({ success: false, parties: [] });
+    if (!query || query.trim().length < 2) {
+      return NextResponse.json({ success: true, parties: [] });
     }
 
-    const results = await searchParties(event.id, query);
+    const results = await searchParties(session.eventId, query.trim());
     return NextResponse.json({ success: true, parties: results });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

@@ -14,6 +14,7 @@ import type {
 } from '../../types/database.ts';
 import { generateInvitationToken, generateEntryPassToken, hashToken } from '../crypto/tokens.ts';
 import { normalizeSaudiPhone } from '../utils/phone.ts';
+import { supabaseAdmin, isSupabaseConfigured } from './supabase.ts';
 
 const DEFAULT_EVENT_ID = 'e82b75a1-4321-4f99-8d76-9c8821a71101';
 
@@ -571,6 +572,9 @@ export async function registerGroupGuest(
     }
   }
 
+  // Atomically reserve quota upfront before async yields
+  group.confirmed_count += seats;
+
   const rawInvToken = generateInvitationToken();
   const invHash = await hashToken(rawInvToken);
   const partyId = `party_grp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -618,8 +622,6 @@ export async function registerGroupGuest(
 
   db.entryPasses.set(partyId, entryPass);
   db.rawPassTokenMap.set(rawPassToken, partyId);
-
-  group.confirmed_count += seats;
 
   if (notes && notes.trim().length > 3) {
     await addWish(event.id, guestName.trim(), notes.trim(), partyId, true);
@@ -725,6 +727,31 @@ export async function executeCheckIn(
   gateSection: 'men' | 'women' | 'general' = 'men',
   forceAdmitCrossSection: boolean = false
 ): Promise<CheckInRPCResponse> {
+  // 1. Production Execution via Supabase PostgreSQL Atomic RPC
+  if (isSupabaseConfigured && supabaseAdmin) {
+    try {
+      const trimmed = rawPassToken.trim();
+      const passTokenHash = await hashToken(trimmed);
+      const { data, error } = await supabaseAdmin.rpc('process_secure_checkin', {
+        p_event_id: eventId,
+        p_pass_token_hash: passTokenHash,
+        p_station_name: stationName,
+        p_operator_name: operatorName,
+        p_checkin_type: checkinType,
+        p_override_count: overrideCount || null,
+        p_gate_section: gateSection,
+        p_force_cross_section: forceAdmitCrossSection,
+      });
+
+      if (!error && data) {
+        return data as CheckInRPCResponse;
+      }
+    } catch (err) {
+      console.warn('Supabase checkin RPC fallback:', err);
+    }
+  }
+
+  // 2. In-Memory Store Execution (Local Dev & Unit Tests)
   const db = getDatabaseStore();
   const trimmed = rawPassToken.trim();
   const passTokenHash = await hashToken(trimmed);

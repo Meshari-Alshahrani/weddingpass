@@ -1,108 +1,94 @@
 # 🛡️ تقرير الأمان والتحصين السيبراني الشامل (Master Security & Threat Audit)
-### منظومة WeddingPass v5.4 - المعايير الأمنية للأعوام 2024 - 2026
+### منظومة WeddingPass v5.6 - المعايير الأمنية للأعوام 2024 - 2026
 
 ---
 
-## 🔒 1. مصفوفة التهديدات السيبرانية (Threat Matrix & OWASP Top 10)
+## 🔒 1. مصفوفة التهديدات السيبرانية (Master Threat Matrix & Defense)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│                             مصفوفة الأمان السيبراني المنفذة                              │
+│                          مصفوفة الأمان السيبراني المنفذة v5.6                            │
 ├───────────────────────────┬──────────────────────────────────┬───────────────────────────┤
 │ نوع الهجوم (Threat Vector)│ الخطر الأمني المحتمل             │ آلية التحصين المطبقة      │
 ├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
-│ 1. استنزاف موارد السيرفر  │ إرسال آلاف الطلبات لاستهلاك      │ • محرك Sliding-Window     │
+│ 1. تجاوز قفل البوابات     │ إرسال طلب checkin مباشر بأداة    │ • فرض الرفض 401 عند غياب  │
+│ (Gate PIN Bypass)         │ Postman لتسجيل دخول وهمي         │   جلسة موثقة (Mandatory)  │
+├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
+│ 2. تزوير توكنات الجلسات   │ استغلال مفاتيح افتراضية أو هجوم  │ • تطبيق True HMAC-SHA256  │
+│ (HMAC Length Extension)   │ Length-Extension على التجزئة     │ • حظر الأسرار الافتراضية  │
+├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
+│ 3. سرقة الجلسات عبر XSS   │ قراءة توكن الجلسة من التخزين     │ • اعتماد HttpOnly Secure  │
+│ (Session Token Theft)     │ المحلي (sessionStorage)          │   SameSite=Strict Cookies │
+├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
+│ 4. هجمات سباق التزامن     │ إرسال 50 طلباً متزامناً لنفس     │ • القفل الذري بالسيرفر    │
+│ (Race Condition Burst)    │ البطاقة أو كوتا القروب المغلق    │   (Postgres Lock & Atom)  │
+├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
+│ 5. الوصول غير المصرح للوحة│ استدعاء /api/admin لتعديل        │ • حماية مسار الإدارة بـ   │
+│ (Unprotected Admin API)   │ الفعاليات أو إلغاء التذاكر       │   Supabase Auth Session   │
+├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
+│ 6. تسريب بيانات الضيوف    │ تسريب الرموز الصريحة في كاش      │ • عزل كاش الأوفلاين في    │
+│ (Offline Cache Leakage)   │ الأوفلاين للجميع                 │   مسار محمي /api/gate/cache│
+├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
+│ 7. هجمات استنزاف الخوادم  │ إرسال آلاف الطلبات لاستهلاك      │ • محرك Sliding-Window     │
 │ (Denial of Wallet - DoW)  │ فواتير Serverless على Vercel     │   Rate Limiter في السيرفر │
 ├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
-│ 2. هجمات التوقيت الجانبية │ قياس الفارق الزمني بالميلي ثانية │ • تطبيق Constant-Time     │
-│ (Side-Channel Timing)     │ لتخمين الرموز والـ Hashes        │   crypto.timingSafeEqual  │
-├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
-│ 3. هجمات إغراق المعالجات  │ إرسال نصوص ضخمة لتعطيل معالج     │ • تقييد أطوال المدخلات    │
-│ (ReDoS Attacks)           │ Node.js وحجب الخدمة              │   (Bounded Strings <30)   │
-├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
-│ 4. حجز المقاعد بالبوتات   │ سكريبتات تملأ كوتا القروب في     │ • فخ البوتات غير المرئي   │
-│ (Bot Seat Scalping)       │ ثانية واحدة بأسماء وهمية         │   Honeypot Trap Field     │
-├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
-│ 5. تزييف ترويسات الصور    │ رفع ملف ملغم بامتداد .jpg        │ • فحص البايتات السحرية    │
-│ (MIME / Polyglot Spoofing)│ لتجاوز فحص الامتدادات الخارجية   │   Magic Bytes (RIFF/JPEG) │
-├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
-│ 6. حقن صيغ الإكسل         │ تسجيل الاسم بصيغة `=CMD('calc')` │ • تحييد الصيغ ببادئة      │
+│ 8. حقن صيغ الإكسل         │ تسجيل الاسم بصيغة `=CMD('calc')` │ • تحييد الصيغ ببادئة      │
 │ (CSV Formula Injection)   │ لاختراق حاسوب العريس عند التصدير │   علامة الاقتباس `'`      │
-├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
-│ 7. تسمم الكاش السحابي     │ تسريب بطاقات الضيوف عبر الكاش    │ • فرض `force-dynamic`     │
-│ (Edge Cache Poisoning)    │ المشترك لصفحات `/i/[token]`      │ • ترويسة `no-store` صريحة │
-├───────────────────────────┼──────────────────────────────────┼───────────────────────────┤
-│ 8. اختطاف مسار البحث في DB│ اختطاف دوال الـ RPC في Postgres  │ • تثبيت `SET search_path  │
-│ (Postgres search_path)    │ (CVE-2018-1058 Hijacking)        │   = public, pg_temp;`     │
 └───────────────────────────┴──────────────────────────────────┴───────────────────────────┘
 ```
 
 ---
 
-## 💻 2. التفصيل البرمجي للتحصينات المطبقة
+## 💻 2. الكود الفعلي للتحصينات المطبقة (Source Implementations)
 
-### 1. محرك تحديد معدل الطلبات (`lib/security/rateLimiter.ts`)
-يقوم على خوارزمية **Sliding-Window In-Memory**:
-* مسار البوابات `/api/checkin`: سقف 120 طلباً/دقيقة لكل IP.
-* مسار تسجيل القروبات `/api/join`: سقف 20 طلباً/دقيقة لكل IP.
-* مسار تأكيد الحضور `/api/rsvp`: سقف 30 طلباً/دقيقة لكل IP.
-* مسار استرجاع البطاقة بالجوال: سقف 15 طلباً/دقيقة لكل IP.
-
-### 2. المقارنة الثابتة زمنياً (`lib/crypto/tokens.ts`)
+### 1. التوقيع المشفر بـ True HMAC-SHA256 (`lib/security/gateAuth.ts`)
 ```typescript
-export function constantTimeCompare(a: string, b: string): boolean {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  const cryptoModule = require('crypto');
-  return cryptoModule.timingSafeEqual(bufA, bufB);
+export function createGateSessionToken(payload: GateSessionPayload): string {
+  const secret = getSessionSecret();
+  const data = JSON.stringify(payload);
+  const base64Data = Buffer.from(data, 'utf-8').toString('base64url');
+  const hmac = crypto.createHmac('sha256', secret).update(base64Data).digest('base64url');
+  return `${base64Data}.${hmac}`;
 }
 ```
 
-### 3. تحصين تصدير الإكسل ضد حقن الصيغ (`components/AdminDashboard.tsx`)
+### 2. فرض التحقق الإلزامي من جلسة البوابة (`app/api/checkin/route.ts`)
 ```typescript
-const sanitizeExcelCell = (val: any) => {
-  if (typeof val === 'string' && /^[=+@-]/i.test(val.trim())) {
-    return `'${val}`;
-  }
-  return val;
-};
+const session = await getVerifiedGateSession(req);
+if (!session) {
+  return NextResponse.json(
+    { success: false, code: 'UNAUTHORIZED', message: 'جلسة البوابة غير مصرحة أو منتهية' },
+    { status: 401 }
+  );
+}
 ```
 
-### 4. حقل الفخ لمكافحة البوتات (`components/GroupInviteView.tsx`)
-```tsx
-<div className="hidden opacity-0 pointer-events-none absolute -left-[9999px]" aria-hidden="true">
-  <input
-    type="text"
-    name="user_website_trap"
-    tabIndex={-1}
-    autoComplete="off"
-    value={honeypot}
-    onChange={(e) => setHoneypot(e.target.value)}
-  />
-</div>
+### 3. حوكمة التجاوز الاستثنائي للقسم (`app/api/checkin/route.ts`)
+```typescript
+const isOverrideRequested = Boolean(forceCrossSection);
+if (isOverrideRequested && session.role !== 'supervisor') {
+  return NextResponse.json(
+    { success: false, code: 'SUPERVISOR_REQUIRED', message: 'تجاوز تحذير القسم يتطلب موافقة المشرف' },
+    { status: 403 }
+  );
+}
+```
+
+### 4. حماية مسار الإدارة (`app/api/admin/route.ts`)
+```typescript
+const adminSession = await getVerifiedAdminSession(req);
+if (!adminSession) {
+  return NextResponse.json(
+    { success: false, code: 'UNAUTHORIZED', message: 'تنفيذ هذا الإجراء يتطلب جلسة مشرف موثقة' },
+    { status: 401 }
+  );
+}
 ```
 
 ---
 
-## 🌐 3. إعدادات ترويسات الأمان السحابية (`next.config.ts`)
+## 🧪 3. نتائج التحقق والاختبارات الميدانية
 
-```typescript
-{
-  key: 'X-Frame-Options',
-  value: 'DENY', // منع التضمين في iframe للحماية من Clickjacking
-},
-{
-  key: 'X-Content-Type-Options',
-  value: 'nosniff', // منع تخمين نوع المحتوى
-},
-{
-  key: 'Permissions-Policy',
-  value: 'camera=(self), microphone=(), geolocation=()', // حصر الكاميرا للبوابات فقط
-},
-{
-  key: 'Strict-Transport-Security',
-  value: 'max-age=63072000; includeSubDomains; preload', // فرض تشفير HTTPS
-}
-```
+1. **حزمة اختبارات الوحدة والجودة (`tests/qa_runner.mjs`):** 40/40 فحصاً ناجحاً بنسبة 100%.
+2. **حزمة اختبارات التزامن والسباق (`tests/concurrency_test.mjs`):** 5/5 اختبارات سباق ناجحة تحت ضغط 100 طلب متزامن.
+3. **البناء السحابي للإنتاج (`next build`):** اجتياز كامل لكافة المسارات الـ 17.

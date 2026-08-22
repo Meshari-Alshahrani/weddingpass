@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- WeddingPass Database Schema (PostgreSQL / Supabase DDL)
--- Version: 2.1 (Production Hardened)
+-- Version: 5.6 (Master Production Hardened)
 -- ==============================================================================
 
 -- تفعيل ملحق pgcrypto للتشفير وتوليد المعرفات
@@ -22,76 +22,80 @@ CREATE TABLE IF NOT EXISTS public.events (
     theme_id TEXT DEFAULT 'classic_gold',
     rsvp_mode TEXT DEFAULT 'count' CHECK (rsvp_mode IN ('simple', 'count')),
     welcome_verse TEXT,
+    invitation_image_url TEXT,
+    timeline_reception TEXT DEFAULT '08:00 م',
+    timeline_ardah TEXT DEFAULT '09:30 م',
+    timeline_dinner TEXT DEFAULT '10:30 م',
+    iban TEXT,
+    bank_name TEXT,
+    gate_pin TEXT DEFAULT '2026',
     owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ------------------------------------------------------------------------------
--- 2. جدول المجموعات والعائلات المدعوة (Parties)
+-- 2. جدول روابط المجموعات الذاتية (Group Invite Links)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.group_links (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
+    host_name TEXT NOT NULL DEFAULT 'العريس',
+    group_name TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    limit_mode TEXT NOT NULL DEFAULT 'warning' CHECK (limit_mode IN ('unlimited', 'warning', 'strict')),
+    max_capacity INT DEFAULT 30,
+    confirmed_count INT NOT NULL DEFAULT 0,
+    max_seats_per_guest INT NOT NULL DEFAULT 2,
+    section TEXT NOT NULL DEFAULT 'men',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(event_id, slug)
+);
+
+-- ------------------------------------------------------------------------------
+-- 3. جدول المجموعات والعائلات المدعوة (Parties)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.parties (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
-    party_name TEXT NOT NULL,                         -- اسم الداعي أو العائلة
-    primary_phone TEXT,                               -- رقم الجوال بصيغة دولية
-    allowed_count INT NOT NULL DEFAULT 1,             -- الحد الأقصى المسموح به للدعوة
-    confirmed_count INT DEFAULT 0,                    -- العدد الذي أكد الضيف حضوره
-    actual_checked_in_count INT DEFAULT 0,            -- العدد الفعلي الذي دخل عند البوابة
-    invitation_token_hash TEXT UNIQUE NOT NULL,       -- SHA-256 Hash لرمز الدعوة الشخصي
-    
-    -- تتبع دورة حياة الدعوة
-    dispatch_status TEXT NOT NULL DEFAULT 'draft'
-        CHECK (dispatch_status IN ('draft', 'whatsapp_opened', 'sent')),
-    rsvp_status TEXT NOT NULL DEFAULT 'unopened' 
-        CHECK (rsvp_status IN ('unopened', 'viewed', 'confirmed', 'declined')),
+    host_name TEXT NOT NULL DEFAULT 'العريس',
+    group_link_id UUID REFERENCES public.group_links(id) ON DELETE SET NULL,
+    group_name TEXT,
+    party_name TEXT NOT NULL,
+    primary_phone TEXT,
+    allowed_count INT NOT NULL DEFAULT 1,
+    confirmed_count INT DEFAULT 0,
+    actual_checked_in_count INT DEFAULT 0,
+    table_number TEXT,
+    needs_wheelchair BOOLEAN DEFAULT false,
+    invitation_token_hash TEXT UNIQUE NOT NULL,
+    dispatch_status TEXT NOT NULL DEFAULT 'draft' CHECK (dispatch_status IN ('draft', 'whatsapp_opened', 'sent')),
+    rsvp_status TEXT NOT NULL DEFAULT 'unopened' CHECK (rsvp_status IN ('unopened', 'viewed', 'confirmed', 'declined')),
     rsvp_at TIMESTAMPTZ,
-    section TEXT DEFAULT 'general',                   -- 'men', 'women', 'vip', 'groom_family', 'bride_family'
+    section TEXT DEFAULT 'men',
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ------------------------------------------------------------------------------
--- 3. جدول أعضاء المجموعة التفصيليين (Party Members - اختياري)
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.party_members (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    party_id UUID NOT NULL REFERENCES public.parties(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    is_primary BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- ------------------------------------------------------------------------------
--- 4. جدول بطاقات الدخول المستقلة (Entry Passes)
+-- 4. جدول بطاقات الدخول المشفرة (Entry Passes)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.entry_passes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     party_id UUID UNIQUE NOT NULL REFERENCES public.parties(id) ON DELETE CASCADE,
-    pass_token_hash TEXT UNIQUE NOT NULL,             -- SHA-256 Hash لرمز بطاقة الدخول Opaque
+    pass_token_hash TEXT UNIQUE NOT NULL,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
     is_checked_in BOOLEAN NOT NULL DEFAULT false,
+    men_checked_in INT DEFAULT 0,
+    women_checked_in INT DEFAULT 0,
     first_check_in_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now(),
     revoked_at TIMESTAMPTZ
 );
 
 -- ------------------------------------------------------------------------------
--- 5. جدول محطات وحسابات مشغلي البوابات (Gate Stations)
--- ------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.gate_stations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
-    station_name TEXT NOT NULL,                       -- مثال: بوابة الرجال 1
-    operator_username TEXT NOT NULL,
-    password_hash TEXT NOT NULL,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    UNIQUE(event_id, operator_username)
-);
-
--- ------------------------------------------------------------------------------
--- 6. جدول سجل التدقيق لعمليات الدخول (Check-in Logs)
+-- 5. جدول سجل التدقيق لعمليات الدخول (Check-in Logs)
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.check_in_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -102,23 +106,52 @@ CREATE TABLE IF NOT EXISTS public.check_in_logs (
     station_name TEXT NOT NULL,
     operator_name TEXT NOT NULL,
     checkin_type TEXT NOT NULL DEFAULT 'QR_SCAN' CHECK (checkin_type IN ('QR_SCAN', 'MANUAL_SEARCH')),
-    scan_result TEXT NOT NULL 
-        CHECK (scan_result IN ('SUCCESS', 'ALREADY_CHECKED_IN', 'REVOKED', 'NOT_FOUND', 'DECLINED', 'MANUAL_OVERRIDE')),
+    scan_result TEXT NOT NULL CHECK (scan_result IN ('SUCCESS', 'ALREADY_CHECKED_IN', 'REVOKED', 'NOT_FOUND', 'DECLINED', 'MANUAL_OVERRIDE', 'CROSS_SECTION_WARNING')),
     admitted_count INT DEFAULT 0,
     metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ------------------------------------------------------------------------------
--- فهارس الأداء الفائق والبحث السريع
+-- 6. جدول ألبوم اللحظات الحية (Event Moments)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.moments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
+    uploader_name TEXT NOT NULL,
+    uploader_phone TEXT,
+    media_url TEXT NOT NULL,
+    caption TEXT,
+    section TEXT NOT NULL DEFAULT 'men',
+    is_approved BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ------------------------------------------------------------------------------
+-- 7. جدول تبريكات وسجل الزوار (Wishes)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.wishes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
+    party_id UUID REFERENCES public.parties(id) ON DELETE SET NULL,
+    party_name TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_approved BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ------------------------------------------------------------------------------
+-- فهارس الأداء العالي والبحث السريع
 -- ------------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_parties_invitation_hash ON public.parties(invitation_token_hash);
 CREATE INDEX IF NOT EXISTS idx_entry_passes_hash ON public.entry_passes(pass_token_hash);
 CREATE INDEX IF NOT EXISTS idx_check_in_logs_event ON public.check_in_logs(event_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_parties_search ON public.parties(event_id, party_name, primary_phone);
+CREATE INDEX IF NOT EXISTS idx_moments_event ON public.moments(event_id, is_approved);
+CREATE INDEX IF NOT EXISTS idx_wishes_event ON public.wishes(event_id, is_approved);
 
 -- ------------------------------------------------------------------------------
--- 7. إجراء التحقق الذري المشدد للدخول (Atomic Check-in RPC with Row Lock)
+-- 8. إجراء التحقق الذري المشدد للدخول (Atomic Check-in RPC with Row Lock)
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.process_secure_checkin(
     p_event_id UUID,
@@ -126,19 +159,22 @@ CREATE OR REPLACE FUNCTION public.process_secure_checkin(
     p_station_name TEXT,
     p_operator_name TEXT,
     p_checkin_type TEXT DEFAULT 'QR_SCAN',
-    p_override_count INT DEFAULT NULL
+    p_override_count INT DEFAULT NULL,
+    p_gate_section TEXT DEFAULT 'men',
+    p_force_cross_section BOOLEAN DEFAULT false
 )
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_pass RECORD;
     v_final_count INT;
+    v_is_vip BOOLEAN;
 BEGIN
     -- 1. البحث وقفل سجل بطاقة الدخول فوراً لمنع أي تزامن
-    SELECT ep.*, p.id AS p_id, p.event_id AS p_event_id, p.party_name, p.confirmed_count, p.allowed_count, p.section, p.rsvp_status
+    SELECT ep.*, p.id AS p_id, p.event_id AS p_event_id, p.party_name, p.confirmed_count, p.allowed_count, p.section, p.rsvp_status, p.table_number, p.needs_wheelchair, p.host_name
     INTO v_pass
     FROM public.entry_passes ep
     JOIN public.parties p ON ep.party_id = p.id
@@ -177,7 +213,25 @@ BEGIN
         );
     END IF;
 
-    -- حالة: تم استخدام البطاقة مسبقاً (Double Check-in Attempt)
+    -- حالة: تحذير القسم المتقاطع (نساء عند الرجال أو العكس)
+    IF NOT p_force_cross_section AND p_gate_section <> 'general' AND v_pass.section <> 'general' AND v_pass.section <> p_gate_section THEN
+        INSERT INTO public.check_in_logs (
+            event_id, party_id, entry_pass_id, scanned_token_hash, station_name, operator_name, checkin_type, scan_result, admitted_count
+        ) VALUES (
+            p_event_id, v_pass.p_id, v_pass.id, p_pass_token_hash, p_station_name, p_operator_name, p_checkin_type, 'CROSS_SECTION_WARNING', 0
+        );
+
+        RETURN jsonb_build_object(
+            'success', false,
+            'code', 'CROSS_SECTION_WARNING',
+            'message', CASE WHEN v_pass.section = 'women' THEN 'هذه البطاقة مخصصة لقسم النساء 🌹' ELSE 'هذه البطاقة مخصصة لقسم الرجال ⚔️' END,
+            'party_name', v_pass.party_name,
+            'section', v_pass.section,
+            'target_gate', CASE WHEN v_pass.section = 'women' THEN 'بوابة النساء' ELSE 'بوابة الرجال' END
+        );
+    END IF;
+
+    -- حالة: تم استخدام البطاقة مسبقاً (Anti-Replay)
     IF v_pass.is_checked_in THEN
         INSERT INTO public.check_in_logs (
             event_id, party_id, entry_pass_id, scanned_token_hash, station_name, operator_name, checkin_type, scan_result, admitted_count
@@ -201,6 +255,8 @@ BEGIN
         v_final_count := COALESCE(v_pass.confirmed_count, 1);
     END IF;
 
+    v_is_vip := (v_pass.section = 'vip' OR v_pass.party_name ILIKE '%الشيخ%' OR v_pass.party_name ILIKE '%سعادة%' OR v_pass.party_name ILIKE '%معالي%');
+
     -- حالة النجاح: تحديث ذري وإدخال في سجل التدقيق
     UPDATE public.entry_passes
     SET 
@@ -223,29 +279,60 @@ BEGIN
     RETURN jsonb_build_object(
         'success', true,
         'code', 'SUCCESS',
-        'message', 'تم التحقق بنجاح، مرحباً بكم!',
+        'message', CASE WHEN v_is_vip THEN 'مرحباً بضيفنا الكريم، أهلاً وسهلاً بكم 👑' ELSE 'تم التحقق بنجاح، مرحباً بكم! 🌹' END,
         'party_name', v_pass.party_name,
         'admitted_count', v_final_count,
         'section', v_pass.section,
+        'table_number', v_pass.table_number,
+        'is_vip', v_is_vip,
+        'needs_wheelchair', COALESCE(v_pass.needs_wheelchair, false),
         'check_in_time', to_char(now(), 'HH12:MI AM')
     );
 END;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 7. تحصين مسار البحث (PostgreSQL search_path Hijacking Defense)
+-- 9. تشديد أمان الصلاحيات وحظر التنفيذ العام
 -- ------------------------------------------------------------------------------
-ALTER FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT) SET search_path = public, pg_temp;
-
--- تشديد أمان الصلاحيات
-REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT) FROM public;
-REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT) FROM anon;
-GRANT EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) FROM public;
+REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) FROM anon;
+GRANT EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) TO authenticated, service_role;
 
 -- ------------------------------------------------------------------------------
--- 8. حظر تسريب بيانات الضيوف عبر Supabase Realtime
+-- 10. تفعيل سياسات أمان مستوى الصفوف (Row Level Security - RLS)
 -- ------------------------------------------------------------------------------
--- حصر البث الحي حصراً على جدول تبريكات القاعة وتعطيله عن الجداول الحساسة
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.parties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.entry_passes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.check_in_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.moments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wishes ENABLE ROW LEVEL SECURITY;
+
+-- سياسات الفعاليات: المالك والمشرف فقط
+CREATE POLICY "Public read events by slug" ON public.events FOR SELECT USING (true);
+CREATE POLICY "Owners update their events" ON public.events FOR UPDATE USING (auth.uid() = owner_id);
+
+-- سياسات بطاقات ومجموعات الضيوف: الخدمة والمشرفون
+CREATE POLICY "Public read parties by token hash" ON public.parties FOR SELECT USING (true);
+CREATE POLICY "Service role full access parties" ON public.parties FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Service role full access entry_passes" ON public.entry_passes FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Service role full access check_in_logs" ON public.check_in_logs FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Service role full access group_links" ON public.group_links FOR ALL USING (auth.role() = 'service_role');
+
+-- سياسات ألبوم اللحظات
+CREATE POLICY "Public read approved moments" ON public.moments FOR SELECT USING (is_approved = true);
+CREATE POLICY "Public insert moments" ON public.moments FOR INSERT WITH CHECK (true);
+CREATE POLICY "Service role moderate moments" ON public.moments FOR ALL USING (auth.role() = 'service_role');
+
+-- سياسات تبريكات القاعة
+CREATE POLICY "Public read approved wishes" ON public.wishes FOR SELECT USING (is_approved = true);
+CREATE POLICY "Public insert wishes" ON public.wishes FOR INSERT WITH CHECK (true);
+CREATE POLICY "Service role moderate wishes" ON public.wishes FOR ALL USING (auth.role() = 'service_role');
+
+-- ------------------------------------------------------------------------------
+-- 11. حظر تسريب بيانات الضيوف عبر Supabase Realtime
+-- ------------------------------------------------------------------------------
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
@@ -255,13 +342,3 @@ BEGIN
         ALTER PUBLICATION supabase_realtime ADD TABLE public.wishes;
     END IF;
 END $$;
-
--- ------------------------------------------------------------------------------
--- 9. سياسات أمان سلة التخزين (Supabase Storage RLS Lockdown)
--- ------------------------------------------------------------------------------
--- سياسات سلة moments لمنع الحذف والتعديل من غير المنظم
--- INSERT INTO storage.buckets (id, name, public) VALUES ('moments', 'moments', true) ON CONFLICT DO NOTHING;
--- CREATE POLICY "Public read approved moments" ON storage.objects FOR SELECT USING (bucket_id = 'moments');
--- CREATE POLICY "Guests insert moments" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'moments');
--- CREATE POLICY "Service role only delete moments" ON storage.objects FOR DELETE USING (auth.role() = 'service_role');
-
