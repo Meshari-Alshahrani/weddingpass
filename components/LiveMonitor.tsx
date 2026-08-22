@@ -1,18 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { WeddingEvent, CheckInLog } from '@/types/database';
+import { WeddingEvent, CheckInLog, Wish } from '@/types/database';
 import {
   Activity,
   Users,
   UserCheck,
-  QrCode,
   Clock,
   Sparkles,
   ArrowRight,
   ShieldCheck,
   AlertTriangle,
   Home,
+  MessageSquareHeart,
+  Heart,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -20,11 +21,13 @@ interface LiveMonitorProps {
   initialEvent: WeddingEvent;
   initialStats: any;
   initialLogs: CheckInLog[];
+  initialWishes?: Wish[];
 }
 
-export function LiveMonitor({ initialEvent, initialStats, initialLogs }: LiveMonitorProps) {
+export function LiveMonitor({ initialEvent, initialStats, initialLogs, initialWishes = [] }: LiveMonitorProps) {
   const [stats, setStats] = useState(initialStats);
   const [logs, setLogs] = useState<CheckInLog[]>(initialLogs);
+  const [wishes, setWishes] = useState<Wish[]>(initialWishes);
   const [lastUpdate, setLastUpdate] = useState<string>('');
 
   useEffect(() => {
@@ -36,6 +39,9 @@ export function LiveMonitor({ initialEvent, initialStats, initialLogs }: LiveMon
         if (data.success) {
           setStats(data.stats);
           setLogs(data.logs);
+          if (data.wishes) {
+            setWishes(data.wishes.filter((w: Wish) => w.is_approved));
+          }
           setLastUpdate(new Date().toLocaleTimeString('ar-SA'));
         }
       } catch (err) {
@@ -48,7 +54,7 @@ export function LiveMonitor({ initialEvent, initialStats, initialLogs }: LiveMon
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 sm:p-10 flex flex-col justify-between space-y-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 sm:p-10 flex flex-col justify-between space-y-6">
       {/* Top Banner */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
         <div className="flex items-center gap-3">
@@ -137,76 +143,118 @@ export function LiveMonitor({ initialEvent, initialStats, initialLogs }: LiveMon
         </div>
       </div>
 
-      {/* Live Check-in Stream Feed */}
-      <div className="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 space-y-4 shadow-xl flex-1 flex flex-col">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-amber-400" />
-            <span>بث عمليات الدخول المباشرة عند الأبواب</span>
-          </h2>
-          <span className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30 font-semibold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>مباشر</span>
-          </span>
-        </div>
+      {/* Check-In Live Stream & Guestbook Cards Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
+        {/* Live Check-in Stream Feed (2 cols) */}
+        <div className="lg:col-span-2 bg-slate-900/90 rounded-3xl border border-slate-800 p-6 space-y-4 shadow-xl flex flex-col">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-amber-400" />
+              <span>بث عمليات الدخول المباشرة عند الأبواب</span>
+            </h2>
+            <span className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30 font-semibold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>مباشر</span>
+            </span>
+          </div>
 
-        <div className="flex-1 overflow-y-auto space-y-2.5 max-h-[420px] pr-1">
-          {logs.length === 0 && (
-            <div className="text-center py-16 text-slate-500 text-sm">
-              لم يتم تسجيل أي حركة دخول حتى الآن. بانتظار وصول الضيوف...
-            </div>
-          )}
+          <div className="flex-1 overflow-y-auto space-y-2 max-h-[360px] pr-1">
+            {logs.length === 0 && (
+              <div className="text-center py-16 text-slate-500 text-sm">
+                لم يتم تسجيل أي حركة دخول حتى الآن. بانتظار وصول الضيوف...
+              </div>
+            )}
 
-          {logs.map((log) => {
-            const timeStr = new Date(log.created_at).toLocaleTimeString('ar-SA', {
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-            });
+            {logs.map((log) => {
+              const timeStr = new Date(log.created_at).toLocaleTimeString('ar-SA', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              });
 
-            return (
-              <div
-                key={log.id}
-                className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all ${
-                  log.scan_result === 'SUCCESS'
-                    ? 'bg-slate-950/80 border-emerald-500/30 text-emerald-200'
-                    : log.scan_result === 'ALREADY_CHECKED_IN'
-                    ? 'bg-rose-950/30 border-rose-500/40 text-rose-200'
-                    : 'bg-slate-950 border-slate-800 text-slate-400'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
-                    {log.scan_result === 'SUCCESS' ? (
-                      <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                    ) : (
-                      <AlertTriangle className="w-5 h-5 text-rose-400" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm text-slate-100 flex items-center gap-2">
-                      <span>{log.scan_result === 'SUCCESS' ? 'دخول مصرح' : 'تنبيه: محاولة مسح مكررة'}</span>
-                      <span className="text-[11px] font-normal bg-slate-800 px-2 py-0.5 rounded-md text-slate-300">
-                        {log.station_name}
-                      </span>
-                      {log.checkin_type === 'MANUAL_SEARCH' && (
-                        <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30">
-                          يدوي
-                        </span>
+              return (
+                <div
+                  key={log.id}
+                  className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
+                    log.scan_result === 'SUCCESS'
+                      ? 'bg-slate-950/80 border-emerald-500/30 text-emerald-200'
+                      : log.scan_result === 'ALREADY_CHECKED_IN'
+                      ? 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                      : 'bg-slate-950 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
+                      {log.scan_result === 'SUCCESS' ? (
+                        <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                      ) : (
+                        <AlertTriangle className="w-5 h-5 text-rose-400" />
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      المسؤول: {log.operator_name} • {log.admitted_count > 0 ? `${log.admitted_count} أفراد` : ''}
-                    </p>
+                    <div>
+                      <div className="font-bold text-sm text-slate-100 flex items-center gap-2">
+                        <span>{log.scan_result === 'SUCCESS' ? 'دخول مصرح' : 'تنبيه: محاولة مسح مكررة'}</span>
+                        <span className="text-[11px] font-normal bg-slate-800 px-2 py-0.5 rounded-md text-slate-300">
+                          {log.station_name}
+                        </span>
+                        {log.checkin_type === 'MANUAL_SEARCH' && (
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30">
+                            يدوي
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        المسؤول: {log.operator_name} • {log.admitted_count > 0 ? `${log.admitted_count} أفراد` : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-xs font-mono font-bold text-slate-300">{timeStr}</span>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </div>
 
-                <div className="text-right">
-                  <span className="text-xs font-mono font-bold text-slate-300">{timeStr}</span>
-                </div>
+        {/* Live Approved Wishes & Blessings Stream (1 col) */}
+        <div className="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 space-y-4 shadow-xl flex flex-col">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h2 className="text-sm font-bold text-pink-300 flex items-center gap-2">
+              <MessageSquareHeart className="w-4 h-4 text-pink-400" />
+              <span>دفتر تبريكات وتهاني الضيوف</span>
+            </h2>
+            <span className="text-[11px] text-slate-400">
+              {wishes.length} تبريكات معتمدة
+            </span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-3 max-h-[360px] pr-1">
+            {wishes.length === 0 && (
+              <div className="text-center py-16 text-slate-500 text-xs">
+                بانتظار وصول تبريكات الضيوف...
               </div>
-            );
-          })}
+            )}
+
+            {wishes.map((w) => (
+              <div
+                key={w.id}
+                className="bg-slate-950 p-3.5 rounded-2xl border border-pink-500/20 space-y-1.5 animate-fadeIn"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+                    <Heart className="w-3 h-3 text-pink-400 fill-pink-400" />
+                    <span>{w.sender_name}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {new Date(w.created_at).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed font-serif">&ldquo;{w.message}&rdquo;</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

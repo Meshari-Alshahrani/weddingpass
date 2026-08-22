@@ -16,7 +16,10 @@ import {
   Navigation,
   CalendarPlus,
   Home,
-  Image as ImageIcon,
+  MessageSquareHeart,
+  Send,
+  ExternalLink,
+  Download,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -35,16 +38,17 @@ export function LuxuryInvitation({
 }: LuxuryInvitationProps) {
   const [mounted, setMounted] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<'unopened' | 'viewed' | 'confirmed' | 'declined'>(party.rsvp_status);
-  const [attendingChoice, setAttendingChoice] = useState<'yes' | 'no' | null>(
-    party.rsvp_status === 'confirmed' ? 'yes' : party.rsvp_status === 'declined' ? 'no' : null
+  const [activeAction, setActiveAction] = useState<'none' | 'attending' | 'declined' | 'wish'>(
+    party.rsvp_status === 'confirmed' ? 'none' : party.rsvp_status === 'declined' ? 'declined' : 'none'
   );
   const [selectedCount, setSelectedCount] = useState<number>(
     party.confirmed_count > 0 ? party.confirmed_count : party.allowed_count
   );
-  const [notes, setNotes] = useState<string>(party.notes || '');
+  const [wishText, setWishText] = useState<string>(party.notes || '');
   const [entryPass, setEntryPass] = useState<EntryPass | undefined>(initialEntryPass);
   const [loading, setLoading] = useState(false);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number }>({
@@ -76,8 +80,7 @@ export function LuxuryInvitation({
     return () => clearInterval(interval);
   }, [event.event_date, event.event_time]);
 
-  const handleRSVPSubmit = async () => {
-    if (!attendingChoice) return;
+  const handleConfirmAttendance = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/rsvp', {
@@ -85,70 +88,108 @@ export function LuxuryInvitation({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token: invitationToken,
-          status: attendingChoice === 'yes' ? 'confirmed' : 'declined',
-          attendingCount: attendingChoice === 'yes' ? selectedCount : 0,
-          notes,
+          status: 'confirmed',
+          attendingCount: selectedCount,
+          notes: wishText,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        setRsvpStatus(attendingChoice === 'yes' ? 'confirmed' : 'declined');
+        setRsvpStatus('confirmed');
+        setActiveAction('none');
         setSubmittedMessage(data.message);
         if (data.entryPass) {
           setEntryPass(data.entryPass);
         }
 
-        if (attendingChoice === 'yes') {
-          confetti({
-            particleCount: 120,
-            spread: 80,
-            origin: { y: 0.6 },
-            colors: ['#D4AF37', '#F3E5AB', '#ffffff', '#10B981'],
-          });
-        }
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ['#D4AF37', '#F3E5AB', '#ffffff', '#10B981'],
+        });
       }
     } catch (err) {
-      console.error('Error submitting RSVP:', err);
+      console.error('RSVP Error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddToCalendar = () => {
-    const title = `حفل زفاف ${event.groom_name} و ${event.bride_name}`;
-    const description = `يشرفنا حضوركم لحفل زفافنا في ${event.venue_name}`;
-    const location = event.venue_name;
-    const startStr = `${event.event_date.replace(/-/g, '')}T${event.event_time.replace(/:/g, '')}Z`;
-    const icsData = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//WeddingPass//AR
-BEGIN:VEVENT
-SUMMARY:${title}
-DESCRIPTION:${description}
-LOCATION:${location}
-DTSTART:${startStr}
-END:VEVENT
-END:VCALENDAR`;
+  const handleDeclineAttendance = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/rsvp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: invitationToken,
+          status: 'declined',
+          attendingCount: 0,
+          notes: wishText,
+        }),
+      });
 
-    const blob = new Blob([icsData], { type: 'text/calendar;charset=utf-8' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'wedding-invitation.ics';
-    link.click();
+      const data = await res.json();
+      if (data.success) {
+        setRsvpStatus('declined');
+        setActiveAction('none');
+        setSubmittedMessage('نقدّر ظرفك ويسعدنا دائماً تواصلك ومشاعركم الطيبة 🌹');
+      }
+    } catch (err) {
+      console.error('Decline Error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const handleSendWishOnly = async () => {
+    if (!wishText.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_wish',
+          partyName: party.party_name,
+          message: wishText.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActiveAction('none');
+        setSubmittedMessage('تم إرسال تهنئتكم الكريمة للعروسين بنجاح، شكراً لكم 🌹');
+      }
+    } catch (err) {
+      console.error('Wish Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Google Calendar URL
+  const cleanDate = event.event_date.replace(/-/g, '');
+  const cleanTime = event.event_time.replace(/:/g, '').slice(0, 4) + '00';
+  const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
+    `حفل زفاف ${event.groom_name} & ${event.bride_name}`
+  )}&dates=${cleanDate}T${cleanTime}/${cleanDate}T235900&details=${encodeURIComponent(
+    `يشرفنا حضوركم لحفل زفافنا في ${event.venue_name}`
+  )}&location=${encodeURIComponent(event.venue_name)}&ctz=Asia/Riyadh`;
+
+  const appleCalendarUrl = `/api/calendar?guest=${encodeURIComponent(party.party_name)}`;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center py-8 px-4 sm:px-6">
-      {/* Background Decorative Gold Light Elements */}
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center py-6 px-4 sm:px-6">
+      {/* Background Decorative Gold Lights */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 right-0 w-80 h-80 bg-amber-600/5 rounded-full blur-3xl" />
       </div>
 
-      <main className="w-full max-w-xl relative z-10 space-y-6">
-        {/* Top Mini Brand Link */}
+      <main className="w-full max-w-lg relative z-10 space-y-4">
+        {/* Top Header */}
         <div className="flex justify-between items-center px-2">
           <Link
             href="/"
@@ -157,54 +198,51 @@ END:VCALENDAR`;
             <Home className="w-3.5 h-3.5" />
             <span>WeddingPass</span>
           </Link>
-          <span className="text-[11px] text-amber-300/70 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+          <span className="text-[11px] text-amber-300/80 bg-amber-500/10 px-3 py-0.5 rounded-full border border-amber-500/20 font-semibold">
             دعوة خاصة
           </span>
         </div>
 
         {/* Main Luxury Invitation Card */}
-        <div className="rounded-3xl bg-slate-900/90 backdrop-blur-2xl border border-amber-500/30 p-6 sm:p-10 shadow-[0_0_50px_-15px_rgba(212,175,55,0.2)] text-center relative overflow-hidden">
-          {/* Top Decorative Border Arch */}
-          <div className="flex justify-center mb-6">
-            <div className="w-24 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent rounded-full" />
+        <div className="rounded-3xl bg-slate-900/90 backdrop-blur-2xl border border-amber-500/30 p-6 sm:p-8 shadow-[0_0_50px_-15px_rgba(212,175,55,0.2)] text-center relative overflow-hidden space-y-4">
+          <div className="flex justify-center">
+            <div className="w-20 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent rounded-full" />
           </div>
 
-          {/* Welcome Bismillah & Verse */}
-          <div className="space-y-3 mb-8">
-            <p className="text-sm font-serif text-amber-300/80">بِسْمِ اللَّـهِ الرَّحْمَـٰنِ الرَّحِيمِ</p>
+          <div className="space-y-2">
+            <p className="text-xs font-serif text-amber-300/80">بِسْمِ اللَّـهِ الرَّحْمَـٰنِ الرَّحِيمِ</p>
             {event.welcome_verse && (
-              <p className="text-xs sm:text-sm text-amber-200/70 font-serif leading-relaxed px-4">
+              <p className="text-xs text-amber-200/70 font-serif leading-relaxed px-2">
                 &ldquo;{event.welcome_verse}&rdquo;
               </p>
             )}
           </div>
 
           {/* Invitation Target Person Header */}
-          <div className="my-6 inline-block px-5 py-2 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm font-semibold">
+          <div className="inline-block px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs font-semibold">
             دعوة خاصة لكريمة / لكريم: <span className="text-amber-100 font-bold">{party.party_name}</span>
           </div>
 
           {/* Custom Card Image (If provided) */}
           {event.invitation_image_url ? (
-            <div className="my-6 rounded-2xl overflow-hidden border border-amber-500/30 shadow-2xl">
+            <div className="my-3 rounded-2xl overflow-hidden border border-amber-500/30 shadow-2xl">
               <img
                 src={event.invitation_image_url}
                 alt="بطاقة الدعوة"
-                className="w-full h-auto object-cover max-h-[450px]"
+                className="w-full h-auto object-cover max-h-[380px]"
               />
             </div>
           ) : (
-            /* Groom & Bride Names Gold Typography */
-            <div className="my-8 space-y-3">
-              <p className="text-xs uppercase tracking-widest text-amber-400/70 font-semibold">
+            <div className="my-4 space-y-2">
+              <p className="text-[11px] uppercase tracking-widest text-amber-400/70 font-semibold">
                 نتشرف بدعوتكم لحفل زفاف
               </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 my-2">
-                <h1 className="text-2xl sm:text-3xl font-bold font-serif gold-gradient-text">
+              <div className="flex items-center justify-center gap-3 my-1">
+                <h1 className="text-2xl font-bold font-serif gold-gradient-text">
                   {event.groom_name}
                 </h1>
-                <Heart className="w-6 h-6 text-amber-400 fill-amber-400/20 animate-pulse hidden sm:block" />
-                <h1 className="text-2xl sm:text-3xl font-bold font-serif gold-gradient-text">
+                <Heart className="w-5 h-5 text-amber-400 fill-amber-400/20 animate-pulse" />
+                <h1 className="text-2xl font-bold font-serif gold-gradient-text">
                   {event.bride_name}
                 </h1>
               </div>
@@ -214,45 +252,41 @@ END:VCALENDAR`;
             </div>
           )}
 
-          {/* Event Date & Time Cards */}
-          <div className="grid grid-cols-2 gap-3 my-6 text-right">
-            <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-500/20 flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400">
-                <Calendar className="w-5 h-5" />
+          {/* Date, Time & Venue */}
+          <div className="grid grid-cols-2 gap-2 text-right">
+            <div className="bg-slate-950/70 p-3 rounded-2xl border border-amber-500/20 flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                <Calendar className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs text-amber-300/60">تاريخ الحفل</p>
-                <p className="text-sm font-bold text-amber-100 mt-0.5">{event.event_date}</p>
+                <p className="text-[10px] text-amber-300/60">تاريخ الحفل</p>
+                <p className="text-xs font-bold text-amber-100">{event.event_date}</p>
               </div>
             </div>
 
-            <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-500/20 flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400">
-                <Clock className="w-5 h-5" />
+            <div className="bg-slate-950/70 p-3 rounded-2xl border border-amber-500/20 flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                <Clock className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs text-amber-300/60">الوقت</p>
-                <p className="text-sm font-bold text-amber-100 mt-0.5">{event.event_time.slice(0, 5)} مساءً</p>
+                <p className="text-[10px] text-amber-300/60">الوقت</p>
+                <p className="text-xs font-bold text-amber-100">{event.event_time.slice(0, 5)} مساءً</p>
               </div>
             </div>
           </div>
 
-          {/* Venue & Location */}
-          <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-500/20 text-right space-y-3 mb-6">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 shrink-0 mt-0.5">
-                <MapPin className="w-5 h-5" />
+          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-amber-500/20 text-right space-y-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 shrink-0">
+                <MapPin className="w-4 h-4" />
               </div>
               <div className="flex-1">
-                <p className="text-xs text-amber-300/60">مكان الحفل</p>
-                <p className="text-sm font-bold text-amber-100 mt-0.5">{event.venue_name}</p>
-                {event.venue_address && (
-                  <p className="text-xs text-amber-200/60 mt-1">{event.venue_address}</p>
-                )}
+                <p className="text-[10px] text-amber-300/60">مكان الحفل</p>
+                <p className="text-xs font-bold text-amber-100">{event.venue_name}</p>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-amber-500/10">
+            <div className="flex gap-2 pt-1 border-t border-amber-500/10">
               {event.venue_maps_url && (
                 <a
                   href={event.venue_maps_url}
@@ -261,11 +295,11 @@ END:VCALENDAR`;
                   className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                 >
                   <Navigation className="w-3.5 h-3.5" />
-                  <span>الموقع على الخريطة</span>
+                  <span>موقع القاعة</span>
                 </a>
               )}
               <button
-                onClick={handleAddToCalendar}
+                onClick={() => setIsCalendarModalOpen(true)}
                 className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <CalendarPlus className="w-3.5 h-3.5" />
@@ -276,161 +310,41 @@ END:VCALENDAR`;
 
           {/* Live Countdown */}
           {mounted && (
-            <div className="my-6 pt-4 border-t border-amber-500/20">
-              <p className="text-xs text-amber-300/70 mb-3 font-semibold">المتبقي على موعد الحفل</p>
-              <div className="grid grid-cols-4 gap-2">
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-amber-500/20">
-                  <span className="text-lg font-bold text-amber-200">{timeLeft.days}</span>
-                  <span className="block text-[10px] text-amber-300/60 mt-0.5">يوم</span>
+            <div className="pt-2 border-t border-amber-500/20">
+              <p className="text-[11px] text-amber-300/70 mb-2 font-semibold">المتبقي على موعد الحفل</p>
+              <div className="grid grid-cols-4 gap-1.5">
+                <div className="bg-slate-950/80 p-2 rounded-xl border border-amber-500/20">
+                  <span className="text-base font-bold text-amber-200">{timeLeft.days}</span>
+                  <span className="block text-[9px] text-amber-300/60 mt-0.5">يوم</span>
                 </div>
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-amber-500/20">
-                  <span className="text-lg font-bold text-amber-200">{timeLeft.hours}</span>
-                  <span className="block text-[10px] text-amber-300/60 mt-0.5">ساعة</span>
+                <div className="bg-slate-950/80 p-2 rounded-xl border border-amber-500/20">
+                  <span className="text-base font-bold text-amber-200">{timeLeft.hours}</span>
+                  <span className="block text-[9px] text-amber-300/60 mt-0.5">ساعة</span>
                 </div>
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-amber-500/20">
-                  <span className="text-lg font-bold text-amber-200">{timeLeft.minutes}</span>
-                  <span className="block text-[10px] text-amber-300/60 mt-0.5">دقيقة</span>
+                <div className="bg-slate-950/80 p-2 rounded-xl border border-amber-500/20">
+                  <span className="text-base font-bold text-amber-200">{timeLeft.minutes}</span>
+                  <span className="block text-[9px] text-amber-300/60 mt-0.5">دقيقة</span>
                 </div>
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-amber-500/20">
-                  <span className="text-lg font-bold text-amber-200">{timeLeft.seconds}</span>
-                  <span className="block text-[10px] text-amber-300/60 mt-0.5">ثانية</span>
+                <div className="bg-slate-950/80 p-2 rounded-xl border border-amber-500/20">
+                  <span className="text-base font-bold text-amber-200">{timeLeft.seconds}</span>
+                  <span className="block text-[9px] text-amber-300/60 mt-0.5">ثانية</span>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* RSVP Interactive Section */}
-        <div className="rounded-3xl bg-slate-900/90 backdrop-blur-2xl border border-amber-500/30 p-6 sm:p-8 shadow-xl text-right space-y-6">
-          <div className="border-b border-amber-500/20 pb-4 text-center">
-            <h2 className="text-lg font-bold text-amber-100 flex items-center justify-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>تأكيد الحضور (RSVP)</span>
-              <Sparkles className="w-4 h-4 text-amber-400" />
-            </h2>
-            <p className="text-xs text-amber-200/70 mt-1">
-              يسعدنا مشاركتكم لنا هذه الليلة المباركة، يرجى تأكيد حضوركم لتجهيز الاستقبال.
-            </p>
-          </div>
-
-          {/* Question 1: Will you honor us with your attendance? */}
-          <div className="space-y-3">
-            <label className="text-xs font-semibold text-amber-300/80 block">
-              هل ستشرفنا بحضوركم الكريم؟
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setAttendingChoice('yes')}
-                className={`py-3.5 px-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer ${
-                  attendingChoice === 'yes'
-                    ? 'bg-emerald-600/30 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/40'
-                    : 'bg-slate-950/60 border-slate-700/60 text-slate-300 hover:border-amber-500/40'
-                }`}
-              >
+        {/* Action Selection Box (The 3 Single-Screen Choices) */}
+        {rsvpStatus === 'confirmed' && (entryPass || initialEntryPass) ? (
+          /* If Confirmed -> Show Boarding Pass Directly */
+          <div className="space-y-3 animate-fadeIn">
+            <div className="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-2xl text-center">
+              <span className="text-xs text-emerald-300 font-bold flex items-center justify-center gap-1.5">
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span>بكل سرور، سأحضر</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAttendingChoice('no')}
-                className={`py-3.5 px-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border transition-all cursor-pointer ${
-                  attendingChoice === 'no'
-                    ? 'bg-rose-950/40 border-rose-500 text-rose-200 ring-2 ring-rose-500/40'
-                    : 'bg-slate-950/60 border-slate-700/60 text-slate-300 hover:border-amber-500/40'
-                }`}
-              >
-                <X className="w-4 h-4 text-rose-400" />
-                <span>أعتذر عن الحضور</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Question 2 (Conditional): How many people will attend from this party? */}
-          {attendingChoice === 'yes' && (
-            <div className="space-y-3 pt-4 border-t border-amber-500/10 animate-fadeIn">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-semibold text-amber-300/80">
-                  كم شخصاً سيحضر من هذه الدعوة؟
-                </label>
-                <span className="text-[11px] text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                  الحد الأقصى: {party.allowed_count} {party.allowed_count === 1 ? 'شخص' : 'أشخاص'}
-                </span>
-              </div>
-
-              {/* Number Selectors */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {Array.from({ length: party.allowed_count }, (_, i) => i + 1).map((num) => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => setSelectedCount(num)}
-                    className={`flex-1 min-w-[50px] py-3 rounded-xl font-bold text-sm border transition-all cursor-pointer flex flex-col items-center justify-center ${
-                      selectedCount === num
-                        ? 'gold-gradient-bg text-slate-950 border-amber-400 shadow-md shadow-amber-500/20 scale-105'
-                        : 'bg-slate-950/60 border-slate-700/70 text-amber-200 hover:border-amber-500/40'
-                    }`}
-                  >
-                    <span>{num}</span>
-                    <span className="text-[10px] font-normal opacity-80">
-                      {num === 1 ? 'شخص' : 'أشخاص'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Optional Notes / Congratulations */}
-          <div className="space-y-1.5 pt-2">
-            <label className="text-xs font-semibold text-amber-300/80 block">
-              رسالة أو تهنئة للعروسين (اختياري)
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="بارك الله لهما وبارك عليهما وجمع بينهما في خير..."
-              rows={2}
-              className="w-full bg-slate-950/70 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
-            />
-          </div>
-
-          {/* Confirm Button */}
-          <button
-            onClick={handleRSVPSubmit}
-            disabled={!attendingChoice || loading}
-            className={`w-full py-4 px-6 rounded-2xl font-bold text-base flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${
-              attendingChoice && !loading
-                ? 'gold-gradient-bg text-slate-950 hover:brightness-110 active:scale-[0.99] shadow-amber-500/20'
-                : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-            }`}
-          >
-            {loading ? (
-              <span>جاري الحفظ...</span>
-            ) : (
-              <>
-                <UserCheck className="w-5 h-5" />
-                <span>حفظ تأكيد الحضور</span>
-              </>
-            )}
-          </button>
-
-          {submittedMessage && (
-            <div className="p-3 bg-emerald-950/50 border border-emerald-500/40 rounded-xl text-center text-xs text-emerald-300 font-semibold animate-fadeIn">
-              {submittedMessage}
-            </div>
-          )}
-        </div>
-
-        {/* Independent Entry Pass Card (Shows ONLY after RSVP is confirmed) */}
-        {rsvpStatus === 'confirmed' && (entryPass || initialEntryPass) && (
-          <div className="space-y-3 animate-fadeIn pt-4">
-            <div className="text-center">
-              <span className="text-xs text-amber-300/80 font-bold bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30">
-                ✨ تم تأكيد حضوركم وتوليد بطاقة الدخول
+                <span>تم تأكيد حضوركم وتوليد بطاقة الدخول</span>
               </span>
             </div>
+
             <EntryPassCard
               partyName={party.party_name}
               confirmedCount={selectedCount}
@@ -441,10 +355,277 @@ END:VCALENDAR`;
               eventDate={event.event_date}
               eventTime={event.event_time}
               venueName={event.venue_name}
+              venueMapsUrl={event.venue_maps_url}
             />
+
+            {/* Optional Wish note if not added yet */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-right space-y-2">
+              <label className="text-xs font-semibold text-amber-300/90 flex items-center gap-1.5">
+                <MessageSquareHeart className="w-3.5 h-3.5 text-amber-400" />
+                <span>إرسال تبريكات وكلمة للعروسين (تظهر في دفتر التهاني)</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={wishText}
+                  onChange={(e) => setWishText(e.target.value)}
+                  placeholder="بارك الله لكما وبارك عليكما وجمع بينكما في خير..."
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  onClick={handleSendWishOnly}
+                  disabled={loading || !wishText.trim()}
+                  className="py-2 px-3.5 rounded-xl gold-gradient-bg text-slate-950 text-xs font-bold shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  إرسال
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Single-Screen 3 Direct Action Buttons */
+          <div className="rounded-3xl bg-slate-900/90 backdrop-blur-2xl border border-amber-500/30 p-5 shadow-xl text-right space-y-4">
+            <div className="text-center pb-2 border-b border-amber-500/10">
+              <p className="text-xs font-bold text-amber-100">
+                يسعدنا ويشرفنا تأكيد حضوركم لمشاركتنا هذه الليلة المباركة 🌹
+              </p>
+            </div>
+
+            {/* 3 Action Buttons */}
+            {activeAction === 'none' && (
+              <div className="space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveAction('attending')}
+                  className="w-full py-3.5 px-4 rounded-2xl gold-gradient-bg text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer"
+                >
+                  <span>👑</span>
+                  <span>سأشرفكم بحضوري الكريم</span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveAction('declined')}
+                    className="py-3 px-3 rounded-xl bg-slate-950 border border-slate-700 hover:border-slate-500 text-slate-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <span>🤍</span>
+                    <span>أعتذر عن الحضور</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveAction('wish')}
+                    className="py-3 px-3 rounded-xl bg-slate-950 border border-amber-500/30 hover:border-amber-500/60 text-amber-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <MessageSquareHeart className="w-3.5 h-3.5 text-amber-400" />
+                    <span>إرسال تهنئة ودعاء</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Scenario 1: Attending Flow */}
+            {activeAction === 'attending' && (
+              <div className="space-y-4 animate-fadeIn">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-amber-300">
+                    كم شخصاً سيحضر من هذه الدعوة؟
+                  </label>
+                  <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    الحد الأقصى: {party.allowed_count} {party.allowed_count === 1 ? 'شخص' : 'أشخاص'}
+                  </span>
+                </div>
+
+                <div className="flex gap-2">
+                  {Array.from({ length: party.allowed_count }, (_, i) => i + 1).map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setSelectedCount(num)}
+                      className={`flex-1 py-2.5 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                        selectedCount === num
+                          ? 'gold-gradient-bg text-slate-950 border-amber-400 shadow-md scale-105'
+                          : 'bg-slate-950 border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      {num === 1 ? 'شخص واحد' : `${num} أشخاص`}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400 block">رسالة أو تهنئة للعروسين (اختياري)</label>
+                  <input
+                    type="text"
+                    value={wishText}
+                    onChange={(e) => setWishText(e.target.value)}
+                    placeholder="بارك الله لهما وبارك عليهما..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveAction('none')}
+                    className="py-3 px-4 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer"
+                  >
+                    تراجع
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmAttendance}
+                    disabled={loading}
+                    className="flex-1 py-3 px-4 rounded-xl gold-gradient-bg text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md hover:brightness-110 cursor-pointer disabled:opacity-50"
+                  >
+                    {loading ? 'جاري الحفظ...' : 'تأكيد الحضور واستلام بطاقة الدخول'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Scenario 2: Declined Flow */}
+            {activeAction === 'declined' && (
+              <div className="space-y-3 animate-fadeIn text-center">
+                <p className="text-xs text-amber-200/90 leading-relaxed">
+                  نقدّر ظرفك ويسعدنا دائماً مشاركتنا تبريكاتك ودعواتك للعروسين 🌹
+                </p>
+
+                <div className="space-y-1 text-right">
+                  <label className="text-xs text-slate-400 block">كلمة أو دعاء للعروسين:</label>
+                  <textarea
+                    value={wishText}
+                    onChange={(e) => setWishText(e.target.value)}
+                    placeholder="ألف مبروك ونتمنى لكم التوفيق والسعادة..."
+                    rows={2}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveAction('none')}
+                    className="py-2.5 px-4 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer"
+                  >
+                    تراجع
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeclineAttendance}
+                    disabled={loading}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-rose-900/60 border border-rose-600 text-rose-100 text-xs font-bold cursor-pointer disabled:opacity-50"
+                  >
+                    {loading ? 'جاري الحفظ...' : 'تأكيد الاعتذار وإرسال التهنئة'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Scenario 3: Wish Only Flow */}
+            {activeAction === 'wish' && (
+              <div className="space-y-3 animate-fadeIn">
+                <div className="space-y-1 text-right">
+                  <label className="text-xs font-semibold text-amber-300 block">
+                    اكتب تهنئة ودعاء للعروسين (تظهر في دفتر التهاني):
+                  </label>
+                  <textarea
+                    value={wishText}
+                    onChange={(e) => setWishText(e.target.value)}
+                    placeholder="بارك الله لكما وبارك عليكما وجمع بينكما في خير..."
+                    rows={3}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveAction('none')}
+                    className="py-2.5 px-4 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendWishOnly}
+                    disabled={loading || !wishText.trim()}
+                    className="flex-1 py-2.5 px-4 rounded-xl gold-gradient-bg text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>إرسال التهنئة للعروسين</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {submittedMessage && (
+              <div className="p-3 bg-emerald-950/50 border border-emerald-500/40 rounded-xl text-center text-xs text-emerald-300 font-semibold animate-fadeIn">
+                {submittedMessage}
+              </div>
+            )}
           </div>
         )}
       </main>
+
+      {/* Calendar Modal */}
+      {isCalendarModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 text-right">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <CalendarPlus className="w-4 h-4 text-amber-400" />
+              <span>إضافة موعد الزواج إلى تقويم هاتفك</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              اختر نوع التقويم المستخدم في جوالك لتلقي تنبيهات تذكيرية تلقائية قبل الحفل:
+            </p>
+
+            <div className="space-y-2 pt-2">
+              <a
+                href={googleCalendarUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsCalendarModalOpen(false)}
+                className="w-full py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-100 flex items-center justify-between transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold">
+                    G
+                  </div>
+                  <span>تقويم Google (Google Calendar)</span>
+                </div>
+                <ExternalLink className="w-4 h-4 text-slate-500" />
+              </a>
+
+              <a
+                href={appleCalendarUrl}
+                download="wedding-invitation.ics"
+                onClick={() => setIsCalendarModalOpen(false)}
+                className="w-full py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-100 flex items-center justify-between transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold">
+                    🍎
+                  </div>
+                  <span>تقويم Apple والآيفون (.ics)</span>
+                </div>
+                <Download className="w-4 h-4 text-slate-500" />
+              </a>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 text-center">
+              <button
+                onClick={() => setIsCalendarModalOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

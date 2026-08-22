@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { WeddingEvent, Party, CheckInLog, GroupInviteLink, GroupLimitMode } from '@/types/database';
+import { WeddingEvent, Party, CheckInLog, GroupInviteLink, GroupLimitMode, Wish } from '@/types/database';
 import * as XLSX from 'xlsx';
 import {
   Users,
@@ -29,6 +29,10 @@ import {
   Link2,
   Share2,
   AlertTriangle,
+  MessageSquareHeart,
+  Bell,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -38,6 +42,7 @@ interface AdminDashboardProps {
   initialStats: any;
   initialLogs: CheckInLog[];
   initialGroupLinks?: GroupInviteLink[];
+  initialWishes?: Wish[];
 }
 
 export function AdminDashboard({
@@ -46,6 +51,7 @@ export function AdminDashboard({
   initialStats,
   initialLogs,
   initialGroupLinks = [],
+  initialWishes = [],
 }: AdminDashboardProps) {
   const [mounted, setMounted] = useState(false);
   const [event, setEvent] = useState<WeddingEvent>(initialEvent);
@@ -53,9 +59,10 @@ export function AdminDashboard({
   const [stats, setStats] = useState(initialStats);
   const [logs, setLogs] = useState<CheckInLog[]>(initialLogs);
   const [groupLinks, setGroupLinks] = useState<GroupInviteLink[]>(initialGroupLinks);
+  const [wishes, setWishes] = useState<Wish[]>(initialWishes);
   const [originUrl, setOriginUrl] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'all' | 'groups' | 'confirmed' | 'missing' | 'declined' | 'unopened'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'groups' | 'confirmed' | 'missing' | 'reminders' | 'wishes' | 'declined'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSection, setSelectedSection] = useState<string>('all');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
@@ -117,9 +124,23 @@ export function AdminDashboard({
         setStats(data.stats);
         setLogs(data.logs);
         if (data.groupLinks) setGroupLinks(data.groupLinks);
+        if (data.wishes) setWishes(data.wishes);
       }
     } catch (err) {
       console.error('Failed to refresh data:', err);
+    }
+  };
+
+  const handleToggleWish = async (wishId: string, currentStatus: boolean) => {
+    try {
+      await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle_wish_approval', wishId, isApproved: !currentStatus }),
+      });
+      refreshData();
+    } catch (err) {
+      console.error('Toggle wish error:', err);
     }
   };
 
@@ -241,6 +262,26 @@ ${inviteUrl}
 
     window.open(waUrl, '_blank');
     refreshData();
+  };
+
+  const handleSendReminderWhatsApp = (party: Party) => {
+    const rawToken = party.raw_invitation_token || party.invitation_token_hash;
+    const inviteUrl = `${originUrl || ''}/i/${rawToken}`;
+    const cleanPhone = party.primary_phone?.replace(/[^0-9]/g, '') || '';
+
+    const reminderMessage = `السلام عليكم ورحمة الله وبركاته 🌹
+نذكّركم بموعد حفل زفاف ${event.groom_name} و ${event.bride_name} بمشيئة الله في ${event.venue_name} الساعة ${event.event_time.slice(0, 5)} مساءً.
+
+رابط بطاقة الدخول الخاصة بكم لتجهيزها عند البوابة:
+${inviteUrl}
+
+نسعد ونتشرف بحضوركم الكريم الليلة ✨`;
+
+    const waUrl = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(reminderMessage)}`
+      : `https://wa.me/?text=${encodeURIComponent(reminderMessage)}`;
+
+    window.open(waUrl, '_blank');
   };
 
   const handleRevokePass = async (partyId: string) => {
@@ -371,8 +412,8 @@ ${inviteUrl}
     if (!matchesSearch || !matchesSection || !matchesGroup) return false;
 
     if (activeTab === 'confirmed') return party.rsvp_status === 'confirmed';
+    if (activeTab === 'reminders') return party.rsvp_status === 'confirmed' && party.actual_checked_in_count === 0;
     if (activeTab === 'declined') return party.rsvp_status === 'declined';
-    if (activeTab === 'unopened') return party.rsvp_status === 'unopened';
     if (activeTab === 'missing') return party.rsvp_status === 'confirmed' && party.actual_checked_in_count === 0;
 
     return true;
@@ -410,7 +451,7 @@ ${inviteUrl}
             className="py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <HelpCircle className="w-4 h-4" />
-            <span>كيف يعمل النظام؟</span>
+            <span>دليل النظام</span>
           </button>
 
           <button
@@ -446,7 +487,7 @@ ${inviteUrl}
           <div className="flex justify-between items-center border-b border-amber-500/20 pb-3">
             <h3 className="text-sm font-bold text-amber-200 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>دليل استخدام WeddingPass لزواجك (خيارات مرنة وسريعة)</span>
+              <span>دليل استخدام WeddingPass (خطوات سريعة وسلسة)</span>
             </h3>
             <button onClick={() => setShowGuide(false)} className="text-slate-400 hover:text-slate-200 text-xs">
               إغلاق الدليل ✕
@@ -458,9 +499,9 @@ ${inviteUrl}
               <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-xs">
                 1
               </div>
-              <h4 className="text-xs font-bold text-slate-100">روابط القروبات العامة (Smart Group Links)</h4>
+              <h4 className="text-xs font-bold text-slate-100">روابط القروبات (Smart Group Links)</h4>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                أنشئ رابطاً مخصصاً لقروب (مثل قروب الزملاء أو العائلة) وانسخه للقروب، ليدخل الضيف ويسجل اسمه وجواله بلمسة واحدة دون الحاجة لإدخال أرقامهم بنفسك.
+                انسخ رابط القروب للواتساب بنقرة واحدة، ليسجل الضيف نفسه دون الحاجة لإدخال أرقامهم بنفسك.
               </p>
             </div>
 
@@ -468,9 +509,9 @@ ${inviteUrl}
               <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs">
                 2
               </div>
-              <h4 className="text-xs font-bold text-slate-100">الدعوات الخاصة الفردية عبر WhatsApp</h4>
+              <h4 className="text-xs font-bold text-slate-100">تذكير المؤكدين قبل الزواج</h4>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                لكبار الشخصيات والوجهاء، ارفع ملف الإكسل أو أدخل أسماءهم، ثم اضغط زر &quot;واتساب&quot; لإرسال دعوة شخصية بضغطة زر.
+                من تبويب &quot;تذكير المؤكدين&quot;، أرسل رسائل تذكير لطيفة برابط بطاقة الدخول قبل الحفل بيوم.
               </p>
             </div>
 
@@ -478,9 +519,9 @@ ${inviteUrl}
               <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center text-xs">
                 3
               </div>
-              <h4 className="text-xs font-bold text-slate-100">دخول القاعة بباركود الـ QR</h4>
+              <h4 className="text-xs font-bold text-slate-100">دفتر التهاني وشاشة القاعة</h4>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                يستلم الضيف بطاقة دخوله، ويوم الزواج يمسح موظف البوابة الباركود لتوثيق الحضور ومنع تكرار البطاقة حتى لو انقطع الإنترنت بالقاعة.
+                راجع تبريكات الضيوف واعتمد المناسب منها للعرض المباشر على شاشة العرض الكبرى في القاعة.
               </p>
             </div>
           </div>
@@ -512,7 +553,6 @@ ${inviteUrl}
         {/* Group Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {groupLinks.map((grp) => {
-            const joinUrl = `${originUrl || ''}/join/${grp.slug}`;
             const isWarningOver = grp.limit_mode === 'warning' && grp.max_capacity && grp.confirmed_count > grp.max_capacity;
 
             return (
@@ -582,7 +622,7 @@ ${inviteUrl}
                     href={`/join/${grp.slug}`}
                     target="_blank"
                     className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 transition-colors"
-                    title="فتح ومعاينة رابط القروب"
+                    title="معاينة رابط القروب"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Link>
@@ -633,11 +673,11 @@ ${inviteUrl}
 
         <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-1">
           <span className="text-xs text-slate-400 flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>لم يفتحوا / معلق</span>
+            <MessageSquareHeart className="w-3.5 h-3.5 text-pink-400" />
+            <span>دفتر التهاني</span>
           </span>
-          <p className="text-2xl font-bold text-amber-300">{stats.unopenedParties + stats.viewedParties}</p>
-          <span className="text-[11px] text-amber-400/70">{stats.viewedParties} شاهدوها</span>
+          <p className="text-2xl font-bold text-pink-300">{wishes.length}</p>
+          <span className="text-[11px] text-pink-400/80">{wishes.filter((w) => w.is_approved).length} معتمد للشاشة</span>
         </div>
 
         <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-1">
@@ -658,7 +698,7 @@ ${inviteUrl}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
             <button
               onClick={() => setActiveTab('all')}
-              className={`py-2 px-4 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer ${
                 activeTab === 'all' ? 'gold-gradient-bg text-slate-950' : 'bg-slate-950 text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -666,23 +706,33 @@ ${inviteUrl}
             </button>
             <button
               onClick={() => setActiveTab('confirmed')}
-              className={`py-2 px-4 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer ${
                 activeTab === 'confirmed' ? 'bg-emerald-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-slate-200'
               }`}
             >
               المؤكدين ({stats.confirmedParties})
             </button>
             <button
-              onClick={() => setActiveTab('missing')}
-              className={`py-2 px-4 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer ${
-                activeTab === 'missing' ? 'bg-amber-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-slate-200'
+              onClick={() => setActiveTab('reminders')}
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                activeTab === 'reminders' ? 'bg-amber-600 text-white' : 'bg-slate-950 text-amber-400 hover:text-amber-300'
               }`}
             >
-              لم يحضروا بعد ({stats.confirmedParties - stats.usedPasses})
+              <Bell className="w-3.5 h-3.5" />
+              <span>تذكير المؤكدين ({stats.confirmedParties - stats.usedPasses})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('wishes')}
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                activeTab === 'wishes' ? 'bg-pink-600 text-white' : 'bg-slate-950 text-pink-400 hover:text-pink-300'
+              }`}
+            >
+              <MessageSquareHeart className="w-3.5 h-3.5" />
+              <span>دفتر التهاني ({wishes.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('declined')}
-              className={`py-2 px-4 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer ${
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer ${
                 activeTab === 'declined' ? 'bg-rose-600 text-white' : 'bg-slate-950 text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -718,186 +768,260 @@ ${inviteUrl}
           </div>
         </div>
 
-        {/* Search & Filter Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ابحث باسم المدعو أو رقم الجوال..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
-            />
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
-          </div>
+        {/* WISHES TAB CONTENT */}
+        {activeTab === 'wishes' ? (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="flex justify-between items-center bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+              <div className="text-xs">
+                <span className="font-bold text-pink-300">دفتر التهاني والتبريكات المباشر</span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  الرسائل المفعلة بـ (العرض على شاشة القاعة) تظهر في شريط البث الحي لشاشات الحفل.
+                </p>
+              </div>
+            </div>
 
-          <div>
-            <select
-              value={selectedGroupFilter}
-              onChange={(e) => setSelectedGroupFilter(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer"
-            >
-              <option value="all">كل المجموعات والقروبات</option>
-              <option value="دعوة خاصة">دعوات خاصة فردية</option>
-              {groupLinks.map((g) => (
-                <option key={g.id} value={g.group_name}>
-                  {g.group_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <select
-              value={selectedSection}
-              onChange={(e) => setSelectedSection(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer"
-            >
-              <option value="all">كل الأقسام والتصنيفات</option>
-              <option value="men">قسم الرجال</option>
-              <option value="women">قسم النساء</option>
-              <option value="vip">كبار الشخصيات (VIP)</option>
-              <option value="groom_family">أهل العريس</option>
-              <option value="bride_family">أهل العروس</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Guests Data Table */}
-        <div className="overflow-x-auto rounded-2xl border border-slate-800">
-          <table className="w-full text-right text-xs">
-            <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
-              <tr>
-                <th className="p-3.5 font-semibold">المدعو الكريم</th>
-                <th className="p-3.5 font-semibold">المجموعة / المصدر</th>
-                <th className="p-3.5 font-semibold">الجوال</th>
-                <th className="p-3.5 font-semibold">العدد المسموح / المؤكد</th>
-                <th className="p-3.5 font-semibold">حالة الدعوة</th>
-                <th className="p-3.5 font-semibold">حالة الدخول بالقاعة</th>
-                <th className="p-3.5 font-semibold text-center">الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {filteredParties.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500">
-                    لا يوجد أي مدعوين يطابقون خيارات البحث الحالية
-                  </td>
-                </tr>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {wishes.length === 0 && (
+                <div className="col-span-2 text-center py-10 text-slate-500 text-xs">
+                  لا توجد أي تهاني مسجلة حتى الآن
+                </div>
               )}
 
-              {filteredParties.map((party) => {
-                const token = party.raw_invitation_token || party.invitation_token_hash;
-                return (
-                  <tr key={party.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="p-3.5">
-                      <div className="font-bold text-slate-100">{party.party_name}</div>
-                      {party.notes && <div className="text-[10px] text-amber-300/80 mt-0.5">{party.notes}</div>}
-                    </td>
-
-                    <td className="p-3.5">
-                      <span className="bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-[10px] font-semibold text-amber-300">
-                        {party.group_name || 'دعوة خاصة'}
-                      </span>
-                    </td>
-
-                    <td className="p-3.5 text-slate-300 font-mono text-[11px]" dir="ltr">
-                      {party.primary_phone || <span className="text-slate-500">-</span>}
-                    </td>
-
-                    <td className="p-3.5">
-                      <span className="font-semibold text-slate-200">
-                        {party.confirmed_count > 0 ? (
-                          <span className="text-emerald-400 font-bold">{party.confirmed_count} مؤكد</span>
-                        ) : (
-                          <span>{party.allowed_count} مسموح</span>
-                        )}
-                      </span>
-                    </td>
-
-                    <td className="p-3.5">
-                      {party.rsvp_status === 'confirmed' && (
-                        <span className="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[11px] font-bold">
-                          ✅ أكد الحضور
-                        </span>
-                      )}
-                      {party.rsvp_status === 'declined' && (
-                        <span className="bg-rose-500/10 text-rose-300 border border-rose-500/30 px-2.5 py-1 rounded-full text-[11px] font-bold">
-                          ❌ اعتذر
-                        </span>
-                      )}
-                      {party.rsvp_status === 'viewed' && (
-                        <span className="bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-full text-[11px] font-semibold">
-                          👁️ فُتحت الدعوة
-                        </span>
-                      )}
-                      {party.rsvp_status === 'unopened' && (
-                        <span className="bg-slate-800 text-slate-400 px-2.5 py-1 rounded-full text-[11px]">
-                          لم تُفتح بعد
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="p-3.5">
-                      {party.actual_checked_in_count > 0 ? (
-                        <span className="bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 px-2.5 py-1 rounded-full text-[11px] font-extrabold flex items-center gap-1 w-fit">
-                          <Check className="w-3 h-3 text-emerald-400" />
-                          <span>دخل ({party.actual_checked_in_count})</span>
-                        </span>
-                      ) : party.rsvp_status === 'confirmed' ? (
-                        <span className="text-slate-400 text-[11px]">في انتظار الوصول</span>
+              {wishes.map((w) => (
+                <div
+                  key={w.id}
+                  className={`p-4 rounded-2xl border space-y-2 transition-all ${
+                    w.is_approved ? 'bg-slate-950 border-pink-500/40' : 'bg-slate-950/60 border-slate-800 opacity-70'
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <span className="font-bold text-xs text-slate-200">{w.sender_name}</span>
+                    <button
+                      onClick={() => handleToggleWish(w.id, w.is_approved)}
+                      className={`py-1 px-2.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                        w.is_approved
+                          ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:bg-pink-500/30'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
+                      }`}
+                    >
+                      {w.is_approved ? (
+                        <>
+                          <Eye className="w-3 h-3 text-pink-400" />
+                          <span>معروض على الشاشة</span>
+                        </>
                       ) : (
-                        <span className="text-slate-500 text-[11px]">-</span>
+                        <>
+                          <EyeOff className="w-3 h-3" />
+                          <span>حجب من الشاشة</span>
+                        </>
                       )}
-                    </td>
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed font-serif">&ldquo;{w.message}&rdquo;</p>
+                  <span className="text-[10px] text-slate-500 block font-mono">
+                    {new Date(w.created_at).toLocaleTimeString('ar-SA')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* GUESTS TABLE & FILTERS */
+          <>
+            {/* Search & Filter Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="ابحث باسم المدعو أو رقم الجوال..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+                />
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              </div>
 
-                    <td className="p-3.5 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleOpenWhatsApp(party)}
-                          className="py-1 px-2.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                          title="إرسال عبر WhatsApp"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" />
-                          <span>واتساب</span>
-                        </button>
+              <div>
+                <select
+                  value={selectedGroupFilter}
+                  onChange={(e) => setSelectedGroupFilter(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer"
+                >
+                  <option value="all">كل المجموعات والقروبات</option>
+                  <option value="دعوة خاصة">دعوات خاصة فردية</option>
+                  {groupLinks.map((g) => (
+                    <option key={g.id} value={g.group_name}>
+                      {g.group_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                        <button
-                          onClick={() => handleCopyLink(token)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
-                          title="نسخ رابط الدعوة المباشر"
-                        >
-                          {copiedToken === token ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
+              <div>
+                <select
+                  value={selectedSection}
+                  onChange={(e) => setSelectedSection(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer"
+                >
+                  <option value="all">كل الأقسام والتصنيفات</option>
+                  <option value="men">قسم الرجال</option>
+                  <option value="women">قسم النساء</option>
+                  <option value="vip">كبار الشخصيات (VIP)</option>
+                  <option value="groom_family">أهل العريس</option>
+                  <option value="bride_family">أهل العروس</option>
+                </select>
+              </div>
+            </div>
 
-                        <Link
-                          href={`/i/${token}`}
-                          target="_blank"
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-                          title="معاينة صفحة الدعوة"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </Link>
-
-                        <button
-                          onClick={() => handleRevokePass(party.id)}
-                          className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 transition-colors cursor-pointer"
-                          title="إلغاء بطاقة الدخول"
-                        >
-                          <ShieldAlert className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
+            {/* Table */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-800">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="p-3.5 font-semibold">المدعو الكريم</th>
+                    <th className="p-3.5 font-semibold">المجموعة / المصدر</th>
+                    <th className="p-3.5 font-semibold">الجوال</th>
+                    <th className="p-3.5 font-semibold">العدد المسموح / المؤكد</th>
+                    <th className="p-3.5 font-semibold">حالة الدعوة</th>
+                    <th className="p-3.5 font-semibold">حالة الدخول بالقاعة</th>
+                    <th className="p-3.5 font-semibold text-center">الإجراءات</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {filteredParties.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-slate-500">
+                        لا يوجد أي مدعوين يطابقون خيارات البحث الحالية
+                      </td>
+                    </tr>
+                  )}
+
+                  {filteredParties.map((party) => {
+                    const token = party.raw_invitation_token || party.invitation_token_hash;
+                    return (
+                      <tr key={party.id} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="p-3.5">
+                          <div className="font-bold text-slate-100">{party.party_name}</div>
+                          {party.notes && <div className="text-[10px] text-amber-300/80 mt-0.5">{party.notes}</div>}
+                        </td>
+
+                        <td className="p-3.5">
+                          <span className="bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-[10px] font-semibold text-amber-300">
+                            {party.group_name || 'دعوة خاصة'}
+                          </span>
+                        </td>
+
+                        <td className="p-3.5 text-slate-300 font-mono text-[11px]" dir="ltr">
+                          {party.primary_phone || <span className="text-slate-500">-</span>}
+                        </td>
+
+                        <td className="p-3.5">
+                          <span className="font-semibold text-slate-200">
+                            {party.confirmed_count > 0 ? (
+                              <span className="text-emerald-400 font-bold">{party.confirmed_count} مؤكد</span>
+                            ) : (
+                              <span>{party.allowed_count} مسموح</span>
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="p-3.5">
+                          {party.rsvp_status === 'confirmed' && (
+                            <span className="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[11px] font-bold">
+                              ✅ أكد الحضور
+                            </span>
+                          )}
+                          {party.rsvp_status === 'declined' && (
+                            <span className="bg-rose-500/10 text-rose-300 border border-rose-500/30 px-2.5 py-1 rounded-full text-[11px] font-bold">
+                              ❌ اعتذر
+                            </span>
+                          )}
+                          {party.rsvp_status === 'viewed' && (
+                            <span className="bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-full text-[11px] font-semibold">
+                              👁️ فُتحت الدعوة
+                            </span>
+                          )}
+                          {party.rsvp_status === 'unopened' && (
+                            <span className="bg-slate-800 text-slate-400 px-2.5 py-1 rounded-full text-[11px]">
+                              لم تُفتح بعد
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3.5">
+                          {party.actual_checked_in_count > 0 ? (
+                            <span className="bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 px-2.5 py-1 rounded-full text-[11px] font-extrabold flex items-center gap-1 w-fit">
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span>دخل ({party.actual_checked_in_count})</span>
+                            </span>
+                          ) : party.rsvp_status === 'confirmed' ? (
+                            <span className="text-slate-400 text-[11px]">في انتظار الوصول</span>
+                          ) : (
+                            <span className="text-slate-500 text-[11px]">-</span>
+                          )}
+                        </td>
+
+                        <td className="p-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Reminder or WhatsApp dispatch */}
+                            {activeTab === 'reminders' || party.rsvp_status === 'confirmed' ? (
+                              <button
+                                onClick={() => handleSendReminderWhatsApp(party)}
+                                className="py-1 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                title="إرسال تذكير بموعد الحفل والبطاقة"
+                              >
+                                <Bell className="w-3.5 h-3.5" />
+                                <span>تذكير واتساب</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenWhatsApp(party)}
+                                className="py-1 px-2.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                                title="إرسال عبر WhatsApp"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                <span>واتساب</span>
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => handleCopyLink(token)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                              title="نسخ رابط الدعوة"
+                            >
+                              {copiedToken === token ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+
+                            <Link
+                              href={`/i/${token}`}
+                              target="_blank"
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                              title="معاينة صفحة الدعوة"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </Link>
+
+                            <button
+                              onClick={() => handleRevokePass(party.id)}
+                              className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 transition-colors cursor-pointer"
+                              title="إلغاء بطاقة الدخول"
+                            >
+                              <ShieldAlert className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
 
       {/* Create Smart Group Link Modal */}

@@ -11,6 +11,9 @@ import {
   updateEventSettings,
   getAllGroupLinks,
   createGroupLink,
+  getWishes,
+  addWish,
+  toggleWishApproval,
 } from '@/lib/db/store';
 
 export async function GET(req: NextRequest) {
@@ -20,6 +23,7 @@ export async function GET(req: NextRequest) {
     const stats = await getEventStats(event.id);
     const logs = await getCheckInLogs(event.id);
     const groupLinks = await getAllGroupLinks(event.id);
+    const wishes = await getWishes(event.id);
 
     return NextResponse.json({
       success: true,
@@ -28,6 +32,7 @@ export async function GET(req: NextRequest) {
       stats,
       logs: logs.slice(0, 50),
       groupLinks,
+      wishes,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -40,6 +45,22 @@ export async function POST(req: NextRequest) {
     const { action } = body;
 
     const event = await getDefaultEvent();
+
+    if (action === 'add_wish') {
+      const { partyName, message, partyId } = body;
+      if (!message || !partyName) {
+        return NextResponse.json({ success: false, message: 'بيانات التهنئة غير مكتملة' }, { status: 400 });
+      }
+
+      const wish = await addWish(event.id, partyName, message, partyId, true);
+      return NextResponse.json({ success: true, wish, message: 'تم إرسال التهنئة بنجاح' });
+    }
+
+    if (action === 'toggle_wish_approval') {
+      const { wishId, isApproved } = body;
+      const ok = await toggleWishApproval(wishId, isApproved);
+      return NextResponse.json({ success: ok });
+    }
 
     if (action === 'create_group_link') {
       const { groupName, slug, limitMode, maxCapacity, maxSeatsPerGuest, section } = body;

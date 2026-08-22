@@ -1,4 +1,11 @@
-import { getDefaultEvent, getAllParties, getEventStats, getCheckInLogs, getAllGroupLinks } from '@/lib/db/store';
+import {
+  getDefaultEvent,
+  getAllParties,
+  getEventStats,
+  getCheckInLogs,
+  getAllGroupLinks,
+  getWishes,
+} from '@/lib/db/store';
 import { AdminDashboard } from '@/components/AdminDashboard';
 
 export default async function AdminPage() {
@@ -7,6 +14,7 @@ export default async function AdminPage() {
   const stats = await getEventStats(event.id);
   const logs = await getCheckInLogs(event.id);
   const groupLinks = await getAllGroupLinks(event.id);
+  const wishes = await getWishes(event.id);
 
   return (
     <AdminDashboard
@@ -15,6 +23,7 @@ export default async function AdminPage() {
       initialStats={stats}
       initialLogs={logs}
       initialGroupLinks={groupLinks}
+      initialWishes={wishes}
     />
   );
 }

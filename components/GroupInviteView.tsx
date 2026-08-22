@@ -21,6 +21,9 @@ import {
   Phone,
   User,
   AlertCircle,
+  ExternalLink,
+  Download,
+  MessageSquareHeart,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -47,6 +50,7 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
   const [isRecoverOpen, setIsRecoverOpen] = useState(false);
   const [recoverPhoneInput, setRecoverPhoneInput] = useState('');
   const [recovering, setRecovering] = useState(false);
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number }>({
@@ -59,7 +63,6 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
   useEffect(() => {
     setMounted(true);
 
-    // Check localStorage for previously saved pass for this event/group
     const localPass = localStorage.getItem(`weddingpass_pass_${event.id}`);
     const localParty = localStorage.getItem(`weddingpass_party_${event.id}`);
     if (localPass && localParty) {
@@ -120,7 +123,6 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
         setEntryPass(data.entryPass);
         setStatusMessage(data.message);
 
-        // Persist in localStorage for instant retrieval on next visit
         localStorage.setItem(`weddingpass_pass_${event.id}`, JSON.stringify(data.entryPass));
         localStorage.setItem(`weddingpass_party_${event.id}`, JSON.stringify(data.party));
 
@@ -169,16 +171,26 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
 
   const isStrictFull = group.limit_mode === 'strict' && group.max_capacity && group.confirmed_count >= group.max_capacity;
 
+  const cleanDate = event.event_date.replace(/-/g, '');
+  const cleanTime = event.event_time.replace(/:/g, '').slice(0, 4) + '00';
+  const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
+    `حفل زفاف ${event.groom_name} & ${event.bride_name}`
+  )}&dates=${cleanDate}T${cleanTime}/${cleanDate}T235900&details=${encodeURIComponent(
+    `يشرفنا حضوركم لحفل زفافنا في ${event.venue_name}`
+  )}&location=${encodeURIComponent(event.venue_name)}&ctz=Asia/Riyadh`;
+
+  const appleCalendarUrl = `/api/calendar?guest=${encodeURIComponent(group.group_name)}`;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center py-8 px-4 sm:px-6">
-      {/* Background Decorative Gold Light */}
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center py-6 px-4 sm:px-6">
+      {/* Background Decorative Gold Lights */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 right-0 w-80 h-80 bg-amber-600/5 rounded-full blur-3xl" />
       </div>
 
-      <main className="w-full max-w-xl relative z-10 space-y-6">
-        {/* Top Header Link */}
+      <main className="w-full max-w-lg relative z-10 space-y-4">
+        {/* Top Header */}
         <div className="flex justify-between items-center px-2">
           <Link
             href="/"
@@ -193,44 +205,43 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
         </div>
 
         {/* Main Luxury Invitation Card */}
-        <div className="rounded-3xl bg-slate-900/90 backdrop-blur-2xl border border-amber-500/30 p-6 sm:p-10 shadow-[0_0_50px_-15px_rgba(212,175,55,0.2)] text-center relative overflow-hidden">
-          <div className="flex justify-center mb-6">
-            <div className="w-24 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent rounded-full" />
+        <div className="rounded-3xl bg-slate-900/90 backdrop-blur-2xl border border-amber-500/30 p-6 sm:p-8 shadow-[0_0_50px_-15px_rgba(212,175,55,0.2)] text-center relative overflow-hidden space-y-4">
+          <div className="flex justify-center">
+            <div className="w-20 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent rounded-full" />
           </div>
 
-          <div className="space-y-3 mb-8">
-            <p className="text-sm font-serif text-amber-300/80">بِسْمِ اللَّـهِ الرَّحْمَـٰنِ الرَّحِيمِ</p>
+          <div className="space-y-2">
+            <p className="text-xs font-serif text-amber-300/80">بِسْمِ اللَّـهِ الرَّحْمَـٰنِ الرَّحِيمِ</p>
             {event.welcome_verse && (
-              <p className="text-xs sm:text-sm text-amber-200/70 font-serif leading-relaxed px-4">
+              <p className="text-xs text-amber-200/70 font-serif leading-relaxed px-2">
                 &ldquo;{event.welcome_verse}&rdquo;
               </p>
             )}
           </div>
 
-          <div className="my-6 inline-block px-5 py-2 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm font-semibold">
+          <div className="inline-block px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs font-semibold">
             دعوة كريمة موجهة لـ: <span className="text-amber-100 font-bold">{group.group_name}</span>
           </div>
 
-          {/* Custom Card Image (If provided) */}
           {event.invitation_image_url ? (
-            <div className="my-6 rounded-2xl overflow-hidden border border-amber-500/30 shadow-2xl">
+            <div className="my-3 rounded-2xl overflow-hidden border border-amber-500/30 shadow-2xl">
               <img
                 src={event.invitation_image_url}
                 alt="بطاقة الدعوة"
-                className="w-full h-auto object-cover max-h-[450px]"
+                className="w-full h-auto object-cover max-h-[380px]"
               />
             </div>
           ) : (
-            <div className="my-8 space-y-3">
-              <p className="text-xs uppercase tracking-widest text-amber-400/70 font-semibold">
+            <div className="my-4 space-y-2">
+              <p className="text-[11px] uppercase tracking-widest text-amber-400/70 font-semibold">
                 نتشرف بدعوتكم لحفل زفاف
               </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 my-2">
-                <h1 className="text-2xl sm:text-3xl font-bold font-serif gold-gradient-text">
+              <div className="flex items-center justify-center gap-3 my-1">
+                <h1 className="text-2xl font-bold font-serif gold-gradient-text">
                   {event.groom_name}
                 </h1>
-                <Heart className="w-6 h-6 text-amber-400 fill-amber-400/20 animate-pulse hidden sm:block" />
-                <h1 className="text-2xl sm:text-3xl font-bold font-serif gold-gradient-text">
+                <Heart className="w-5 h-5 text-amber-400 fill-amber-400/20 animate-pulse" />
+                <h1 className="text-2xl font-bold font-serif gold-gradient-text">
                   {event.bride_name}
                 </h1>
               </div>
@@ -240,76 +251,82 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
             </div>
           )}
 
-          {/* Date & Location */}
-          <div className="grid grid-cols-2 gap-3 my-6 text-right">
-            <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-500/20 flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400">
-                <Calendar className="w-5 h-5" />
+          {/* Date, Time & Venue */}
+          <div className="grid grid-cols-2 gap-2 text-right">
+            <div className="bg-slate-950/70 p-3 rounded-2xl border border-amber-500/20 flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                <Calendar className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs text-amber-300/60">تاريخ الحفل</p>
-                <p className="text-sm font-bold text-amber-100 mt-0.5">{event.event_date}</p>
+                <p className="text-[10px] text-amber-300/60">تاريخ الحفل</p>
+                <p className="text-xs font-bold text-amber-100">{event.event_date}</p>
               </div>
             </div>
 
-            <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-500/20 flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400">
-                <Clock className="w-5 h-5" />
+            <div className="bg-slate-950/70 p-3 rounded-2xl border border-amber-500/20 flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                <Clock className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs text-amber-300/60">الوقت</p>
-                <p className="text-sm font-bold text-amber-100 mt-0.5">{event.event_time.slice(0, 5)} مساءً</p>
+                <p className="text-[10px] text-amber-300/60">الوقت</p>
+                <p className="text-xs font-bold text-amber-100">{event.event_time.slice(0, 5)} مساءً</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-950/70 p-4 rounded-2xl border border-amber-500/20 text-right space-y-3 mb-6">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 shrink-0 mt-0.5">
-                <MapPin className="w-5 h-5" />
+          <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-amber-500/20 text-right space-y-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 shrink-0">
+                <MapPin className="w-4 h-4" />
               </div>
               <div className="flex-1">
-                <p className="text-xs text-amber-300/60">مكان الحفل</p>
-                <p className="text-sm font-bold text-amber-100 mt-0.5">{event.venue_name}</p>
-                {event.venue_address && (
-                  <p className="text-xs text-amber-200/60 mt-1">{event.venue_address}</p>
-                )}
+                <p className="text-[10px] text-amber-300/60">مكان الحفل</p>
+                <p className="text-xs font-bold text-amber-100">{event.venue_name}</p>
               </div>
             </div>
 
-            {event.venue_maps_url && (
-              <a
-                href={event.venue_maps_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+            <div className="flex gap-2 pt-1 border-t border-amber-500/10">
+              {event.venue_maps_url && (
+                <a
+                  href={event.venue_maps_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>موقع القاعة</span>
+                </a>
+              )}
+              <button
+                onClick={() => setIsCalendarModalOpen(true)}
+                className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Navigation className="w-3.5 h-3.5" />
-                <span>فتح الموقع على خرائط Google Maps</span>
-              </a>
-            )}
+                <CalendarPlus className="w-3.5 h-3.5" />
+                <span>إضافة للتقويم</span>
+              </button>
+            </div>
           </div>
 
           {/* Countdown */}
           {mounted && (
-            <div className="my-4 pt-4 border-t border-amber-500/20">
-              <p className="text-xs text-amber-300/70 mb-3 font-semibold">المتبقي على موعد الحفل</p>
-              <div className="grid grid-cols-4 gap-2">
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-amber-500/20">
-                  <span className="text-lg font-bold text-amber-200">{timeLeft.days}</span>
-                  <span className="block text-[10px] text-amber-300/60 mt-0.5">يوم</span>
+            <div className="pt-2 border-t border-amber-500/20">
+              <p className="text-[11px] text-amber-300/70 mb-2 font-semibold">المتبقي على موعد الحفل</p>
+              <div className="grid grid-cols-4 gap-1.5">
+                <div className="bg-slate-950/80 p-2 rounded-xl border border-amber-500/20">
+                  <span className="text-base font-bold text-amber-200">{timeLeft.days}</span>
+                  <span className="block text-[9px] text-amber-300/60 mt-0.5">يوم</span>
                 </div>
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-amber-500/20">
-                  <span className="text-lg font-bold text-amber-200">{timeLeft.hours}</span>
-                  <span className="block text-[10px] text-amber-300/60 mt-0.5">ساعة</span>
+                <div className="bg-slate-950/80 p-2 rounded-xl border border-amber-500/20">
+                  <span className="text-base font-bold text-amber-200">{timeLeft.hours}</span>
+                  <span className="block text-[9px] text-amber-300/60 mt-0.5">ساعة</span>
                 </div>
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-amber-500/20">
-                  <span className="text-lg font-bold text-amber-200">{timeLeft.minutes}</span>
-                  <span className="block text-[10px] text-amber-300/60 mt-0.5">دقيقة</span>
+                <div className="bg-slate-950/80 p-2 rounded-xl border border-amber-500/20">
+                  <span className="text-base font-bold text-amber-200">{timeLeft.minutes}</span>
+                  <span className="block text-[9px] text-amber-300/60 mt-0.5">دقيقة</span>
                 </div>
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-amber-500/20">
-                  <span className="text-lg font-bold text-amber-200">{timeLeft.seconds}</span>
-                  <span className="block text-[10px] text-amber-300/60 mt-0.5">ثانية</span>
+                <div className="bg-slate-950/80 p-2 rounded-xl border border-amber-500/20">
+                  <span className="text-base font-bold text-amber-200">{timeLeft.seconds}</span>
+                  <span className="block text-[9px] text-amber-300/60 mt-0.5">ثانية</span>
                 </div>
               </div>
             </div>
@@ -318,9 +335,9 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
 
         {/* If Already Registered -> Show Entry Pass Directly */}
         {confirmedParty && entryPass ? (
-          <div className="space-y-4 animate-fadeIn">
-            <div className="p-4 bg-emerald-950/40 border border-emerald-500/40 rounded-2xl text-center space-y-1">
-              <div className="flex items-center justify-center gap-1.5 text-emerald-400 font-bold text-sm">
+          <div className="space-y-3 animate-fadeIn">
+            <div className="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-2xl text-center space-y-1">
+              <div className="flex items-center justify-center gap-1.5 text-emerald-400 font-bold text-xs">
                 <Check className="w-4 h-4" />
                 <span>تم تأكيد حضورك بنجاح!</span>
               </div>
@@ -339,6 +356,7 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
               eventDate={event.event_date}
               eventTime={event.event_time}
               venueName={event.venue_name}
+              venueMapsUrl={event.venue_maps_url}
             />
 
             <div className="text-center pt-2">
@@ -356,40 +374,35 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
             </div>
           </div>
         ) : isStrictFull ? (
-          /* Strict Quota Full Notice */
-          <div className="rounded-3xl bg-slate-900/90 border border-rose-500/40 p-8 text-center space-y-3">
-            <AlertCircle className="w-10 h-10 text-rose-400 mx-auto" />
-            <h3 className="text-base font-bold text-slate-100">عذراً، اكتمل العدد المخصص لهذا القروب 🌹</h3>
+          <div className="rounded-3xl bg-slate-900/90 border border-rose-500/40 p-6 text-center space-y-3">
+            <AlertCircle className="w-8 h-8 text-rose-400 mx-auto" />
+            <h3 className="text-sm font-bold text-slate-100">عذراً، اكتمل العدد المخصص لهذا القروب 🌹</h3>
             <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
               تم الوصول للحد الأقصى المسموح به من المقاعد لهذه المجموعة. إذا كنت قد سجلت مسبقاً، يمكنك استرجاع بطاقتك أدناه.
             </p>
             <button
               onClick={() => setIsRecoverOpen(true)}
-              className="py-2.5 px-5 rounded-xl bg-slate-800 text-amber-300 text-xs font-bold border border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer"
+              className="py-2.5 px-4 rounded-xl bg-slate-800 text-amber-300 text-xs font-bold border border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer"
             >
               استرجاع بطاقة دخولي برقم الجوال
             </button>
           </div>
         ) : (
           /* Fast 3-Second RSVP Form */
-          <div className="rounded-3xl bg-slate-900/90 backdrop-blur-2xl border border-amber-500/30 p-6 sm:p-8 shadow-xl text-right space-y-5">
-            <div className="border-b border-amber-500/20 pb-3 text-center">
-              <h2 className="text-base font-bold text-amber-100 flex items-center justify-center gap-2">
+          <div className="rounded-3xl bg-slate-900/90 backdrop-blur-2xl border border-amber-500/30 p-5 shadow-xl text-right space-y-4">
+            <div className="border-b border-amber-500/10 pb-2 text-center">
+              <h2 className="text-sm font-bold text-amber-100 flex items-center justify-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-amber-400" />
                 <span>تسجيل الحضور واستلام بطاقة الدخول</span>
                 <Sparkles className="w-4 h-4 text-amber-400" />
               </h2>
-              <p className="text-xs text-amber-200/70 mt-1">
-                سجل اسمك ورقم جوالك لاستلام باركود الدخول المباشر للقاعة.
-              </p>
             </div>
 
-            <form onSubmit={handleRegister} className="space-y-4">
-              {/* Name Field (with autocomplete) */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-amber-300/90 flex items-center gap-1.5">
+            <form onSubmit={handleRegister} className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-amber-400" />
-                  <span>الاسم الكريم (يظهر في بطاقة الدخول) *</span>
+                  <span>الاسم الكريم *</span>
                 </label>
                 <input
                   type="text"
@@ -399,13 +412,12 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   placeholder="مثال: خالد محمد العتيبي"
-                  className="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+                  className="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
                 />
               </div>
 
-              {/* Phone Field (with autocomplete) */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-amber-300/90 flex items-center gap-1.5">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-amber-400" />
                   <span>رقم الجوال *</span>
                 </label>
@@ -417,16 +429,15 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
                   value={guestPhone}
                   onChange={(e) => setGuestPhone(e.target.value)}
                   placeholder="05XXXXXXXX"
-                  className="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400 text-left font-mono"
+                  className="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400 font-mono text-left"
                   dir="ltr"
                 />
               </div>
 
-              {/* Seats selector (if allowed > 1) */}
               {group.max_seats_per_guest > 1 && (
-                <div className="space-y-2 pt-2 border-t border-amber-500/10">
-                  <label className="text-xs font-semibold text-amber-300/90 block">
-                    عدد الأشخاص الحاضرين من هذه الدعوة:
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-xs font-semibold text-amber-300 block">
+                    عدد المقاعد:
                   </label>
                   <div className="flex gap-2">
                     {Array.from({ length: group.max_seats_per_guest }, (_, i) => i + 1).map((num) => (
@@ -434,21 +445,32 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
                         key={num}
                         type="button"
                         onClick={() => setSelectedSeats(num)}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
+                        className={`flex-1 py-2 rounded-xl font-bold text-xs border transition-all cursor-pointer ${
                           selectedSeats === num
                             ? 'gold-gradient-bg text-slate-950 border-amber-400 shadow-md scale-105'
-                            : 'bg-slate-950/60 border-slate-700 text-slate-300 hover:border-amber-500/40'
+                            : 'bg-slate-950 border-slate-700 text-slate-300'
                         }`}
                       >
-                        {num === 1 ? 'شخص واحد (أنا فقط)' : `${num} أشخاص (مع مرافق)`}
+                        {num === 1 ? 'شخص واحد' : `${num} أشخاص`}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400 block">تهنئة أو كلمة للعروسين (اختياري)</label>
+                <input
+                  type="text"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="بارك الله لكما وبارك عليكما..."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
               {errorMsg && (
-                <div className="p-3 bg-rose-950/50 border border-rose-500/40 rounded-xl text-center text-xs text-rose-300 font-semibold">
+                <div className="p-2.5 bg-rose-950/50 border border-rose-500/40 rounded-xl text-center text-xs text-rose-300 font-semibold">
                   {errorMsg}
                 </div>
               )}
@@ -456,23 +478,23 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-4 px-6 rounded-2xl font-bold text-sm gold-gradient-bg text-slate-950 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
+                className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs gold-gradient-bg text-slate-950 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer disabled:opacity-50"
               >
                 {loading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>جاري تأكيد الحضور وتوليد البطاقة...</span>
+                    <span>جاري التأكيد وتوليد البطاقة...</span>
                   </>
                 ) : (
                   <>
-                    <UserCheck className="w-5 h-5" />
+                    <UserCheck className="w-4 h-4" />
                     <span>تأكيد الحضور واستلام بطاقة الدخول</span>
                   </>
                 )}
               </button>
             </form>
 
-            <div className="text-center pt-3 border-t border-slate-800">
+            <div className="text-center pt-2 border-t border-slate-800">
               <button
                 type="button"
                 onClick={() => setIsRecoverOpen(true)}
@@ -485,6 +507,63 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
           </div>
         )}
       </main>
+
+      {/* Calendar Modal */}
+      {isCalendarModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 text-right">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <CalendarPlus className="w-4 h-4 text-amber-400" />
+              <span>إضافة موعد الزواج إلى تقويم هاتفك</span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              اختر نوع التقويم المستخدم في جوالك لتلقي تنبيهات تذكيرية تلقائية قبل الحفل:
+            </p>
+
+            <div className="space-y-2 pt-2">
+              <a
+                href={googleCalendarUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsCalendarModalOpen(false)}
+                className="w-full py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-100 flex items-center justify-between transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold">
+                    G
+                  </div>
+                  <span>تقويم Google (Google Calendar)</span>
+                </div>
+                <ExternalLink className="w-4 h-4 text-slate-500" />
+              </a>
+
+              <a
+                href={appleCalendarUrl}
+                download="wedding-invitation.ics"
+                onClick={() => setIsCalendarModalOpen(false)}
+                className="w-full py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-100 flex items-center justify-between transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold">
+                    🍎
+                  </div>
+                  <span>تقويم Apple والآيفون (.ics)</span>
+                </div>
+                <Download className="w-4 h-4 text-slate-500" />
+              </a>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 text-center">
+              <button
+                onClick={() => setIsCalendarModalOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Phone Recovery Modal */}
       {isRecoverOpen && (
@@ -504,7 +583,7 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
                 value={recoverPhoneInput}
                 onChange={(e) => setRecoverPhoneInput(e.target.value)}
                 placeholder="05XXXXXXXX"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 focus:outline-none focus:border-amber-400 font-mono"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400 font-mono"
                 dir="ltr"
                 autoFocus
               />

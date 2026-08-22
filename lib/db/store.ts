@@ -8,6 +8,7 @@ import {
   DispatchStatus,
   GroupInviteLink,
   GroupLimitMode,
+  Wish,
 } from '@/types/database';
 import { generateInvitationToken, generateEntryPassToken, hashToken } from '@/lib/crypto/tokens';
 import { normalizeSaudiPhone } from '@/lib/utils/phone';
@@ -36,6 +37,7 @@ interface DatabaseStore {
   parties: Map<string, Party>;
   entryPasses: Map<string, EntryPass>;
   groupLinks: Map<string, GroupInviteLink>; // slug -> GroupInviteLink
+  wishes: Wish[];
   checkInLogs: CheckInLog[];
   tokenToPartyMap: Map<string, string>; // rawInvitationToken -> partyId
   rawPassTokenMap: Map<string, string>; // rawPassToken -> partyId
@@ -52,6 +54,7 @@ function getDatabaseStore(): DatabaseStore {
       parties: new Map(),
       entryPasses: new Map(),
       groupLinks: new Map(),
+      wishes: [],
       checkInLogs: [],
       tokenToPartyMap: new Map(),
       rawPassTokenMap: new Map(),
@@ -108,7 +111,35 @@ function seedDemoData(db: DatabaseStore) {
 
   demoGroups.forEach((g) => db.groupLinks.set(g.slug, g));
 
-  // 2. Seed Demo Individual Parties
+  // 2. Seed Initial Wishes (Guestbook)
+  db.wishes = [
+    {
+      id: 'wish_1',
+      event_id: DEFAULT_EVENT_ID,
+      sender_name: 'د. خالد بن سلطان السبيعي',
+      message: 'ألف ألف مبروك يا بو فهد، بارك الله لكما وبارك عليكما وجمع بينكما في خير وسعادة دائمة.',
+      is_approved: true,
+      created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
+    },
+    {
+      id: 'wish_2',
+      event_id: DEFAULT_EVENT_ID,
+      sender_name: 'أحمد محمد العتيبي',
+      message: 'نسأل الله لكم حياة عامرة بالمودة والرحمة والذرية الصالحة، متشوقين لحضور ليلتكم المباركة.',
+      is_approved: true,
+      created_at: new Date(Date.now() - 3600000 * 3).toISOString(),
+    },
+    {
+      id: 'wish_3',
+      event_id: DEFAULT_EVENT_ID,
+      sender_name: 'سارة بنت إبراهيم الراجحي',
+      message: 'بارك الله للعروسين وأتم فرحتكم على خير وعافية 🌹',
+      is_approved: true,
+      created_at: new Date(Date.now() - 3600000 * 1).toISOString(),
+    },
+  ];
+
+  // 3. Seed Demo Individual Parties
   const demoSeed = [
     { name: 'أحمد محمد العتيبي (عائلة)', phone: '966501234567', allowed: 4, confirmed: 3, rsvp: 'confirmed' as RSVPStatus, section: 'men', group: 'دعوة خاصة' },
     { name: 'د. خالد بن سلطان السبيعي', phone: '966551239876', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'vip', group: 'دعوة خاصة' },
@@ -207,10 +238,18 @@ export async function submitPartyRSVP(
     return { success: false, message: 'لم يتم العثور على الدعوة' };
   }
 
+  const previousStatus = party.rsvp_status;
+  const previousConfirmed = party.confirmed_count;
+
   party.rsvp_status = status;
   party.rsvp_at = new Date().toISOString();
   party.updated_at = new Date().toISOString();
-  if (notes !== undefined) party.notes = notes;
+  if (notes !== undefined) {
+    party.notes = notes;
+    if (notes && notes.trim().length > 3) {
+      await addWish(party.event_id, party.party_name, notes.trim(), party.id, true);
+    }
+  }
 
   if (status === 'confirmed') {
     party.confirmed_count = Math.min(Math.max(1, attendingCount), party.allowed_count);
@@ -233,9 +272,59 @@ export async function submitPartyRSVP(
     }
     return { success: true, entryPass: pass, message: 'تم تأكيد حضورك بنجاح' };
   } else {
+    // Safe decrement of group quota if previously confirmed
+    if (party.group_link_id && previousStatus === 'confirmed' && previousConfirmed > 0) {
+      for (const grp of Array.from(db.groupLinks.values())) {
+        if (grp.id === party.group_link_id) {
+          grp.confirmed_count = Math.max(0, grp.confirmed_count - previousConfirmed);
+          break;
+        }
+      }
+    }
     party.confirmed_count = 0;
-    return { success: true, message: 'تم تسجيل اعتذارك شاكرين لك تواصلك' };
+    return { success: true, message: 'تم تسجيل اعتذارك شاكرين لك تواصلك ومشاعركم الطيبة' };
   }
+}
+
+// ------------------------------------------------------------------------------
+// Wishes & Guestbook Engine
+// ------------------------------------------------------------------------------
+
+export async function addWish(
+  eventId: string,
+  senderName: string,
+  message: string,
+  partyId?: string | null,
+  isApproved: boolean = true
+): Promise<Wish> {
+  const db = getDatabaseStore();
+  const newWish: Wish = {
+    id: `wish_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    event_id: eventId,
+    party_id: partyId || null,
+    sender_name: senderName.trim(),
+    message: message.trim(),
+    is_approved: isApproved,
+    created_at: new Date().toISOString(),
+  };
+
+  db.wishes.unshift(newWish);
+  return newWish;
+}
+
+export async function getWishes(eventId: string, approvedOnly: boolean = false): Promise<Wish[]> {
+  const db = getDatabaseStore();
+  return db.wishes.filter((w) => w.event_id === eventId && (!approvedOnly || w.is_approved));
+}
+
+export async function toggleWishApproval(wishId: string, isApproved: boolean): Promise<boolean> {
+  const db = getDatabaseStore();
+  const wish = db.wishes.find((w) => w.id === wishId);
+  if (wish) {
+    wish.is_approved = isApproved;
+    return true;
+  }
+  return false;
 }
 
 // ------------------------------------------------------------------------------
@@ -327,6 +416,10 @@ export async function registerGroupGuest(
           db.rawPassTokenMap.set(rawPassToken, p.id);
         }
 
+        if (notes && notes.trim().length > 3) {
+          await addWish(event.id, p.party_name, notes.trim(), p.id, true);
+        }
+
         return {
           success: true,
           code: 'ALREADY_REGISTERED',
@@ -399,6 +492,11 @@ export async function registerGroupGuest(
 
   // Increment group count
   group.confirmed_count += seats;
+
+  // Add Wish to Guestbook if provided
+  if (notes && notes.trim().length > 3) {
+    await addWish(event.id, guestName.trim(), notes.trim(), partyId, true);
+  }
 
   return {
     success: true,

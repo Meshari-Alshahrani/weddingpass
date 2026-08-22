@@ -79,6 +79,16 @@ export interface EntryPass {
   revoked_at?: string | null;
 }
 
+export interface Wish {
+  id: string;
+  event_id: string;
+  party_id?: string | null;
+  sender_name: string;
+  message: string;
+  is_approved: boolean; // For display on big hall screen
+  created_at: string;
+}
+
 export interface GateStation {
   id: string;
   event_id: string;
