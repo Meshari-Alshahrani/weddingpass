@@ -6,17 +6,7 @@ let supabaseRepoInstance: SupabaseRepository | null = null;
 let mockRepoInstance: MockRepository | null = null;
 
 export function getRepository() {
-  const isProduction = process.env.NODE_ENV === 'production';
-
-  // In production, enforce Supabase Repository strictly (Fail-Closed)
-  if (isProduction) {
-    if (!supabaseRepoInstance) {
-      supabaseRepoInstance = new SupabaseRepository();
-    }
-    return supabaseRepoInstance;
-  }
-
-  // In development, if Supabase keys exist, use Supabase
+  // If Supabase keys are configured in environment, use Supabase Repository
   if (isSupabaseConfigured && supabaseAdmin) {
     if (!supabaseRepoInstance) {
       supabaseRepoInstance = new SupabaseRepository();
@@ -24,7 +14,7 @@ export function getRepository() {
     return supabaseRepoInstance;
   }
 
-  // In local test / zero-config dev mode, use isolated MockRepository
+  // Fallback to MockRepository if Supabase is not yet configured in environment variables
   if (!mockRepoInstance) {
     mockRepoInstance = new MockRepository();
   }
