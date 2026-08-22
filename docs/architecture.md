@@ -1,5 +1,5 @@
 # 🏛️ المعمارية التقنية وهندسة النظم (System Architecture)
-### منظومة WeddingPass v5.4
+### منظومة WeddingPass v5.8 (Enterprise Architecture)
 
 ---
 
@@ -9,7 +9,7 @@
 graph TD
     subgraph Clients[طبقة المتصفحات والأجهزة]
         G1[📱 هاتف الضيف: الدعوة وبطاقة الدخول]
-        G2[📲 هاتف موظف البوابة: ماسح QR + Wake Lock]
+        G2[📲 هاتف موظف البوابة: ماسح QR + كوكيز __Host-]
         G3[💻 حاسوب العريس: لوحة التحكم المتقدمة]
         G4[📺 شاشة القاعة الكبرى: البث المباشر للتهاني]
     end
@@ -20,35 +20,37 @@ graph TD
         E3[🛑 Zero-Cache Dynamic Enforcer]
     end
 
-    subgraph AppRouter[طبقة تطبيق Next.js App Router]
+    subgraph AppRouter[طبقة تطبيق Next.js App Router - 18 مساراً]
         R1[/i/token: معالج الدعوات الفردية]
         R2[/join/slug: معالج قروبات الواتساب]
         R3[/checkin: محطة البوابات الذكية]
         R4[/admin: لوحة التحكم والداعين المتعددين]
-        R5[/api/*: مسارات التحقق و RSVP والمزامنة]
+        R5[/api/gate/auth: توثيق جلسات HMAC]
+        R6[/api/checkin: التحضير الإلزامي المحصن]
+        R7[/api/admin/system-health: فحص النظام المحمي]
     end
 
-    subgraph CoreEngine[محرك المنظومة والأمان]
-        C1[🔑 Token Decoupling & SHA-256 Hasher]
-        C2[⏱️ Constant-Time Comparison Engine]
-        C3[💾 Offline Cache & IndexedDB Mesh]
+    subgraph Repositories[طبقة المستودعات - Repository Pattern]
+        P1[lib/repositories/types.ts]
+        P2[SupabaseRepository: الإنتاج و Fail-Closed الصارم]
+        P3[MockRepository: الاختبارات السريعة المعزولة]
     end
 
     subgraph Database[طبقة البيانات والتخزين - Supabase PostgreSQL]
-        D1[(Events & Parties Tables)]
-        D2[(Atomic RPC Functions SET search_path)]
+        D1[(Events & Parties Tables - Zero-Trust RLS)]
+        D2[(Atomic RPC Functions SET search_path = '')]
         D3[🪣 Moments Storage Bucket + RLS]
     end
 
     Clients --> Edge
     Edge --> AppRouter
-    AppRouter --> CoreEngine
-    CoreEngine --> Database
+    AppRouter --> Repositories
+    Repositories --> Database
 ```
 
 ---
 
-## 🗂️ 2. خريطة المسارات الـ 15 في Next.js App Router
+## 🗂️ 2. خريطة المسارات الـ 18 في Next.js App Router
 
 | المسار (Route) | النوع | الوظيفة |
 | :--- | :--- | :--- |
@@ -57,11 +59,17 @@ graph TD
 | **`/join/[slug]`** | Dynamic SSR | صفحة التسجيل الذاتي لقروبات الواتساب مع فحص الكوتا |
 | **`/checkin`** | Dynamic SSR | ماسح البوابات المحمي بـ PIN، الفلاش، وقفل الشاشة |
 | **`/admin`** | Dynamic SSR | لوحة تحكم المنظم والداعين المتعددين |
-| **`/admin/live`** | Static | شاشة العرض الحية لتبريكات القاعة |
+| **`/admin/live`** | Dynamic SSR | شاشة العرض الحية لتبريكات القاعة |
 | **`/admin/manifest`** | Dynamic SSR | كشف الطوارئ A4 الطباعي |
 | **`/admin/stress-test`** | Static | شاشة محاكاة اختبارات الضغط الميداني |
-| **`/moments`** | Static | ألبوم ومكتبة لقطات الحفل الحية |
+| **`/moments`** | Dynamic SSR | ألبوم ومكتبة لقطات الحفل الحية |
 | **`/api/checkin`** | API Handler | مسار التحقق من الباركود وتوجيه الطاولات وتنبيهات VIP |
+| **`/api/gate/auth`** | API Handler | مسار توثيق جلسات البوابة بـ HMAC-SHA256 المشفر |
+| **`/api/gate/cache`** | API Handler | مسار كاش الأوفلاين المشفر المحمي بجلسة البوابة |
+| **`/api/health`** | API Handler | مسار فحص البنية التحتية العام |
+| **`/api/admin/system-health`**| API Handler | مسار فحص صحة النظام الإداري المحمي |
+| **`/api/public/wish`** | API Handler | مسار إرسال تهاني الضيوف العام المحصن |
+| **`/api/public/moment`** | API Handler | مسار رفع صور الضيوف العام المحصن |
 | **`/api/join`** | API Handler | مسار تسجيل أعضاء المجموعات وحجز المقاعد الذري |
 | **`/api/rsvp`** | API Handler | مسار تأكيد واعتذار الضيوف وتوليد البطاقات |
 | **`/api/admin`** | API Handler | مسار إدارة الفعالية واعتماد الصور والتهاني |
