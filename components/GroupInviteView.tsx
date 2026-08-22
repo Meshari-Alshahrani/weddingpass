@@ -51,6 +51,7 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
   const [recoverPhoneInput, setRecoverPhoneInput] = useState('');
   const [recovering, setRecovering] = useState(false);
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+  const [honeypot, setHoneypot] = useState('');
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number }>({
@@ -96,6 +97,12 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (honeypot.trim()) {
+      // Silent rejection of automated bot registration
+      console.warn('Bot attempt blocked via Honeypot trap');
+      return;
+    }
+
     if (!guestName.trim()) {
       setErrorMsg('يرجى كتابة الاسم الكريم');
       return;
@@ -423,6 +430,18 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
             </div>
 
             <form onSubmit={handleRegister} className="space-y-3.5">
+              {/* Invisible Honeypot field for anti-bot defense */}
+              <div className="hidden opacity-0 pointer-events-none absolute -left-[9999px]" aria-hidden="true">
+                <input
+                  type="text"
+                  name="user_website_trap"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                />
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-amber-400" />

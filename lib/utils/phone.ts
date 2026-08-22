@@ -12,8 +12,11 @@ const ARABIC_DIGITS: Record<string, string> = {
 export function normalizeSaudiPhone(rawPhone: string): string {
   if (!rawPhone) return '';
 
+  // Bound length to 30 characters to prevent ReDoS / CPU exhaustion
+  const bounded = String(rawPhone).slice(0, 30);
+
   // 1. Convert Arabic-Indic numerals to Latin digits
-  let clean = rawPhone.replace(/[٠-٩]/g, (digit) => ARABIC_DIGITS[digit] || digit);
+  let clean = bounded.replace(/[٠-٩]/g, (digit) => ARABIC_DIGITS[digit] || digit);
 
   // 2. Remove all non-numeric characters (spaces, dashes, parentheses, plus signs)
   clean = clean.replace(/[^0-9]/g, '');

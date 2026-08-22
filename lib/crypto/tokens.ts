@@ -53,3 +53,23 @@ export async function hashToken(token: string): Promise<string> {
     return cryptoModule.createHash('sha256').update(normalized).digest('hex');
   }
 }
+
+/**
+ * Constant-time comparison to prevent side-channel timing attacks on hashes/tokens
+ */
+export function constantTimeCompare(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  try {
+    const cryptoModule = require('crypto');
+    return cryptoModule.timingSafeEqual(bufA, bufB);
+  } catch {
+    let mismatch = 0;
+    for (let i = 0; i < bufA.length; i++) {
+      mismatch |= bufA[i] ^ bufB[i];
+    }
+    return mismatch === 0;
+  }
+}
