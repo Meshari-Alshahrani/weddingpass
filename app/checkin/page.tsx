@@ -6,6 +6,10 @@ export const fetchCache = 'force-no-store';
 
 export default async function CheckInPage() {
   const event = await getDefaultEvent();
+  const safeEvent = {
+    ...event,
+    gate_pin: undefined, // Strip secret PIN from client bundle
+  };
 
-  return <GateScanner initialEvent={event} />;
+  return <GateScanner initialEvent={safeEvent} />;
 }

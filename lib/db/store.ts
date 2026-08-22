@@ -1,4 +1,4 @@
-import {
+import type {
   WeddingEvent,
   Party,
   EntryPass,
@@ -11,9 +11,9 @@ import {
   Wish,
   EventMoment,
   HostRole,
-} from '@/types/database';
-import { generateInvitationToken, generateEntryPassToken, hashToken } from '@/lib/crypto/tokens';
-import { normalizeSaudiPhone } from '@/lib/utils/phone';
+} from '../../types/database.ts';
+import { generateInvitationToken, generateEntryPassToken, hashToken } from '../crypto/tokens.ts';
+import { normalizeSaudiPhone } from '../utils/phone.ts';
 
 const DEFAULT_EVENT_ID = 'e82b75a1-4321-4f99-8d76-9c8821a71101';
 
@@ -509,10 +509,17 @@ export async function registerGroupGuest(
   if (!groupData) {
     return { success: false, code: 'NOT_FOUND', message: 'رابط المجموعة غير صالح أو تم إيقافه' };
   }
-
   const { group, event } = groupData;
   const normalizedPhone = normalizeSaudiPhone(guestPhone);
-  const seats = Math.min(Math.max(1, seatsCount), group.max_seats_per_guest);
+  const seats = Math.max(1, seatsCount);
+
+  if (seats > group.max_seats_per_guest) {
+    return {
+      success: false,
+      code: 'QUOTA_EXCEEDED',
+      message: `الحد الأقصى المسموح به هو ${group.max_seats_per_guest} مقاعد لكل ضيف في هذه المجموعة`,
+    };
+  }
 
   if (normalizedPhone) {
     for (const p of Array.from(db.parties.values())) {

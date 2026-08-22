@@ -1,0 +1,35 @@
+name: Supabase Project Keep-Alive
+# Prevents Supabase project auto-pausing after 7 days of inactivity
+
+on:
+  schedule:
+    # Runs every 3 days at 04:00 UTC
+    - cron: '0 4 */3 * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database Endpoint
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "⚠️ Supabase environment variables not configured in GitHub Secrets. Skipping ping."
+            exit 0
+          fi
+          
+          echo "Pinging Supabase REST endpoint: ${SUPABASE_URL}/rest/v1/"
+          HTTP_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/events?select=id&limit=1")
+          
+          echo "Supabase Response Code: ${HTTP_RESPONSE}"
+          if [ "$HTTP_RESPONSE" -ge 200 ] && [ "$HTTP_RESPONSE" -lt 400 ]; then
+            echo "✅ Supabase project is active and responsive."
+          else
+            echo "⚠️ Unexpected response (${HTTP_RESPONSE}), but ping was transmitted."
+          fi

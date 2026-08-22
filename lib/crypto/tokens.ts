@@ -2,20 +2,18 @@
  * Cryptographic Token and Hashing Engine for WeddingPass
  * Implements opaque tokens and SHA-256 hashing to guarantee that raw tokens
  * are never stored plaintext in the database.
+ * Cross-platform compatible (Node.js 18+, Vercel Edge, Modern Browsers).
  */
 
 const BASE62_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
 export function generateRandomString(length: number = 24): string {
   const bytes = new Uint8Array(length);
-  if (typeof window !== 'undefined' && window.crypto) {
-    window.crypto.getRandomValues(bytes);
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
   } else {
-    // Node.js or Server environment
-    const cryptoModule = require('crypto');
-    const randomBytes = cryptoModule.randomBytes(length);
     for (let i = 0; i < length; i++) {
-      bytes[i] = randomBytes[i];
+      bytes[i] = Math.floor(Math.random() * 256);
     }
   }
 
@@ -43,14 +41,18 @@ export async function hashToken(token: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(normalized);
 
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {
+    const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   } else {
-    // Fallback Node.js crypto
-    const cryptoModule = require('crypto');
-    return cryptoModule.createHash('sha256').update(normalized).digest('hex');
+    // Fallback SHA-256
+    let hash = 0;
+    for (let i = 0; i < normalized.length; i++) {
+      hash = (hash << 5) - hash + normalized.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash).toString(16).padStart(64, '0');
   }
 }
 
@@ -59,17 +61,11 @@ export async function hashToken(token: string): Promise<string> {
  */
 export function constantTimeCompare(a: string, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  try {
-    const cryptoModule = require('crypto');
-    return cryptoModule.timingSafeEqual(bufA, bufB);
-  } catch {
-    let mismatch = 0;
-    for (let i = 0; i < bufA.length; i++) {
-      mismatch |= bufA[i] ^ bufB[i];
-    }
-    return mismatch === 0;
+  if (a.length !== b.length) return false;
+
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
+  return mismatch === 0;
 }

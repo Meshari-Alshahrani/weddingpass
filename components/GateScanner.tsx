@@ -75,24 +75,45 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const wakeLockRef = useRef<any>(null);
 
-  const correctPin = initialEvent.gate_pin || '2026';
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
 
-  // 1. PIN Auth Check
+  // 1. PIN Auth Check via Verified Server Session
   useEffect(() => {
-    const savedPin = sessionStorage.getItem(`weddingpass_gate_pin_${initialEvent.id}`);
-    if (savedPin === correctPin) {
+    const savedToken = sessionStorage.getItem(`weddingpass_gate_session_${initialEvent.id}`);
+    if (savedToken) {
+      setSessionToken(savedToken);
       setIsAuthenticated(true);
     }
-  }, [correctPin, initialEvent.id]);
+  }, [initialEvent.id]);
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput.trim() === correctPin) {
-      sessionStorage.setItem(`weddingpass_gate_pin_${initialEvent.id}`, correctPin);
-      setIsAuthenticated(true);
-    } else {
-      alert('رمز الدخول غير صحيح');
-      setPinInput('');
+    if (!pinInput.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/gate/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin: pinInput.trim(),
+          stationName,
+          operatorName,
+          gateSection,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.sessionToken) {
+        sessionStorage.setItem(`weddingpass_gate_session_${initialEvent.id}`, data.sessionToken);
+        setSessionToken(data.sessionToken);
+        setIsAuthenticated(true);
+      } else {
+        alert(data.message || 'رمز الدخول غير صحيح');
+        setPinInput('');
+      }
+    } catch (err) {
+      alert('حدث خطأ أثناء الاتصال بالسيرفر للتحقق من الرمز');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -300,6 +321,7 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             token: trimmed,
+            gateSessionToken: sessionToken,
             stationName,
             operatorName,
             checkinType: type,

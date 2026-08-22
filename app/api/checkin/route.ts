@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { token, passToken, stationName, operatorName, checkinType, overrideCount, gateSection, forceCrossSection } = body;
+    const { token, passToken, gateSessionToken, stationName, operatorName, checkinType, overrideCount, gateSection, forceCrossSection } = body;
 
     const rawToken = token || passToken;
     if (!rawToken) {
@@ -25,8 +25,21 @@ export async function POST(req: NextRequest) {
     }
 
     const event = await getDefaultEvent();
-    const station = stationName || 'بوابة الاستقبال 1';
-    const operator = operatorName || 'مشغل البوابة';
+    let station = stationName || 'بوابة الاستقبال 1';
+    let operator = operatorName || 'مشغل البوابة';
+    let section = gateSection || 'men';
+
+    // Verify Server-Side Gate Session if present
+    if (gateSessionToken) {
+      const { verifyGateSessionToken } = await import('@/lib/security/gateAuth');
+      const verified = await verifyGateSessionToken(gateSessionToken);
+      if (verified) {
+        station = verified.stationName;
+        operator = verified.operatorName;
+        section = verified.gateSection;
+      }
+    }
+
     const type = checkinType === 'MANUAL_SEARCH' ? 'MANUAL_SEARCH' : 'QR_SCAN';
 
     const result = await executeCheckIn(
@@ -36,7 +49,7 @@ export async function POST(req: NextRequest) {
       operator,
       type,
       overrideCount,
-      gateSection || 'men',
+      section,
       Boolean(forceCrossSection)
     );
 

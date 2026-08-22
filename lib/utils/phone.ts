@@ -22,15 +22,19 @@ export function normalizeSaudiPhone(rawPhone: string): string {
   clean = clean.replace(/[^0-9]/g, '');
 
   // 3. Normalize Saudi numbers to 9665XXXXXXXX
-  if (clean.startsWith('00966')) {
+  if (clean.startsWith('00966') && clean.length === 14) {
     clean = clean.substring(2);
   } else if (clean.startsWith('05') && clean.length === 10) {
     clean = '966' + clean.substring(1);
   } else if (clean.startsWith('5') && clean.length === 9) {
     clean = '966' + clean;
+  } else if (clean.startsWith('9665') && clean.length === 12) {
+    // already in 9665XXXXXXXX format
+  } else {
+    return '';
   }
 
-  return clean;
+  return clean.startsWith('9665') && clean.length === 12 ? clean : '';
 }
 
 export function formatPhoneDisplay(normalizedPhone: string): string {
