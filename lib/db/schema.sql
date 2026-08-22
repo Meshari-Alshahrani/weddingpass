@@ -293,11 +293,12 @@ END;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 9. تشديد أمان الصلاحيات وحظر التنفيذ العام
+-- 9. تشديد أمان الصلاحيات وحظر التنفيذ العام (Service Role ONLY)
 -- ------------------------------------------------------------------------------
 REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) FROM public;
 REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) FROM anon;
-GRANT EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) TO service_role;
 
 -- ------------------------------------------------------------------------------
 -- 10. تفعيل سياسات أمان مستوى الصفوف (Row Level Security - RLS)
@@ -310,26 +311,31 @@ ALTER TABLE public.check_in_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.moments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wishes ENABLE ROW LEVEL SECURITY;
 
--- سياسات الفعاليات: المالك والمشرف فقط
-CREATE POLICY "Public read events by slug" ON public.events FOR SELECT USING (true);
-CREATE POLICY "Owners update their events" ON public.events FOR UPDATE USING (auth.uid() = owner_id);
+-- سياسات الفعاليات: المالك والمشرف فقط (حجب الـ PIN والـ IBAN عن الاستعلام العام)
+CREATE POLICY "Owners manage their events" ON public.events FOR ALL USING (auth.uid() = owner_id) WITH CHECK (auth.uid() = owner_id);
+CREATE POLICY "Service role full access events" ON public.events FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
--- سياسات بطاقات ومجموعات الضيوف: الخدمة والمشرفون
-CREATE POLICY "Public read parties by token hash" ON public.parties FOR SELECT USING (true);
-CREATE POLICY "Service role full access parties" ON public.parties FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY "Service role full access entry_passes" ON public.entry_passes FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY "Service role full access check_in_logs" ON public.check_in_logs FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY "Service role full access group_links" ON public.group_links FOR ALL USING (auth.role() = 'service_role');
+-- العرض الآمن العام للفعالية (بدون بيانات حساسة)
+CREATE OR REPLACE VIEW public.public_events_view WITH (security_invoker = false) AS
+SELECT id, slug, groom_name, bride_name, event_date, event_time, venue_name, venue_address, venue_maps_url, theme_id, rsvp_mode, welcome_verse, invitation_image_url, timeline_reception, timeline_ardah, timeline_dinner, created_at
+FROM public.events;
+GRANT SELECT ON public.public_events_view TO anon, authenticated;
+
+-- سياسات بطاقات ومجموعات الضيوف: الخدمة فقط (لا يوجد SELECT عام)
+CREATE POLICY "Service role full access parties" ON public.parties FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "Service role full access entry_passes" ON public.entry_passes FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "Service role full access check_in_logs" ON public.check_in_logs FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "Service role full access group_links" ON public.group_links FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 -- سياسات ألبوم اللحظات
 CREATE POLICY "Public read approved moments" ON public.moments FOR SELECT USING (is_approved = true);
 CREATE POLICY "Public insert moments" ON public.moments FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role moderate moments" ON public.moments FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Service role full access moments" ON public.moments FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 -- سياسات تبريكات القاعة
 CREATE POLICY "Public read approved wishes" ON public.wishes FOR SELECT USING (is_approved = true);
 CREATE POLICY "Public insert wishes" ON public.wishes FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service role moderate wishes" ON public.wishes FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Service role full access wishes" ON public.wishes FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 -- ------------------------------------------------------------------------------
 -- 11. حظر تسريب بيانات الضيوف عبر Supabase Realtime

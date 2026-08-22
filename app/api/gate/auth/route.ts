@@ -92,14 +92,27 @@ export async function POST(req: NextRequest) {
       gateSection: sessionPayload.gateSection,
     });
 
-    // Set HttpOnly Secure SameSite Cookie (4 hours lifetime)
-    response.cookies.set('gate_session', sessionToken, {
+    // Set OWASP Compliant HttpOnly Secure SameSite Cookie (4 hours lifetime)
+    const isProd = process.env.NODE_ENV === 'production';
+    const cookieName = isProd ? '__Host-gate_session' : 'gate_session';
+
+    response.cookies.set(cookieName, sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProd,
       sameSite: 'strict',
       path: '/',
       maxAge: 4 * 60 * 60, // 4 hours
     });
+
+    if (!isProd) {
+      response.cookies.set('gate_session', sessionToken, {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'strict',
+        path: '/',
+        maxAge: 4 * 60 * 60,
+      });
+    }
 
     return response;
   } catch (err: any) {

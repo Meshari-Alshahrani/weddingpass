@@ -1,19 +1,20 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+// 2026 Modern & Legacy Variable Resolution
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const secretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey));
+export const isSupabaseConfigured = Boolean(supabaseUrl && (publishableKey || secretKey));
 
-// Public Client (Anonymous / Auth)
-export const supabase: SupabaseClient | null = isSupabaseConfigured && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
+// Public Client (Browser / Next.js Public Client)
+export const supabase: SupabaseClient | null = isSupabaseConfigured && publishableKey
+  ? createClient(supabaseUrl, publishableKey)
   : null;
 
-// Admin Service Role Client (Server-side execution with highest privileges)
-export const supabaseAdmin: SupabaseClient | null = isSupabaseConfigured && supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey, {
+// Server-Side Secret Client (Direct Database & Atomic RPC Execution with Bypass of RLS)
+export const supabaseAdmin: SupabaseClient | null = isSupabaseConfigured && secretKey
+  ? createClient(supabaseUrl, secretKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,

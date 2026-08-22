@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- Migration: 003_atomic_checkin_rpc.sql
--- Description: High-concurrency atomic check-in RPC function with FOR UPDATE locking
+-- Description: Hardened Atomic Check-in RPC function locked to service_role with empty search_path
 -- ==============================================================================
 
 CREATE OR REPLACE FUNCTION public.process_secure_checkin(
@@ -16,7 +16,7 @@ CREATE OR REPLACE FUNCTION public.process_secure_checkin(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = ''
 AS $$
 DECLARE
     v_pass RECORD;
@@ -141,7 +141,8 @@ BEGIN
 END;
 $$;
 
--- Security Grants: Restrict Execution to Authenticated and Service Role
+-- Security Grants: Strictly Locked Down to service_role ONLY (No public/anon/authenticated access)
 REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) FROM public;
 REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) FROM anon;
-GRANT EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.process_secure_checkin(UUID, TEXT, TEXT, TEXT, TEXT, INT, TEXT, BOOLEAN) TO service_role;

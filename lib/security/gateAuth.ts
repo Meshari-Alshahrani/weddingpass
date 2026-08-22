@@ -78,8 +78,8 @@ export function verifyGateSessionToken(token: string): GateSessionPayload | null
  * Extracts and strictly verifies the Gate Session from NextRequest (Cookie or Header)
  */
 export async function getVerifiedGateSession(req: NextRequest): Promise<GateSessionPayload | null> {
-  // 1. Try HttpOnly Cookie
-  const cookieToken = req.cookies.get('gate_session')?.value;
+  // 1. Try OWASP __Host- prefixed or standard HttpOnly Cookie
+  const cookieToken = req.cookies.get('__Host-gate_session')?.value || req.cookies.get('gate_session')?.value;
   if (cookieToken) {
     const verified = verifyGateSessionToken(cookieToken);
     if (verified) return verified;
