@@ -1,14 +1,29 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Download, ShieldCheck, Sparkles, MapPin, Calendar, Clock, Users, CalendarPlus, Share2, Check, ExternalLink } from 'lucide-react';
+import {
+  Download,
+  ShieldCheck,
+  Sparkles,
+  MapPin,
+  Calendar,
+  Clock,
+  Users,
+  CalendarPlus,
+  Check,
+  ExternalLink,
+  Shield,
+  Armchair,
+  CameraOff,
+} from 'lucide-react';
 import { toPng, toBlob } from 'html-to-image';
 
 interface EntryPassCardProps {
   partyName: string;
   confirmedCount: number;
   section: string;
+  tableNumber?: string | null;
   passToken: string;
   eventGroom: string;
   eventBride: string;
@@ -22,6 +37,7 @@ export function EntryPassCard({
   partyName,
   confirmedCount,
   section,
+  tableNumber,
   passToken,
   eventGroom,
   eventBride,
@@ -35,11 +51,31 @@ export function EntryPassCard({
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 
+  // Live Anti-Screenshot Ticking Clock
+  const [liveTime, setLiveTime] = useState<string>('');
+
+  useEffect(() => {
+    const updateTime = () => {
+      setLiveTime(
+        new Date().toLocaleTimeString('ar-SA', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const isWomenSection = section === 'women';
+
   const getSectionLabel = (sec: string) => {
     switch (sec) {
-      case 'men': return 'قسم الرجال';
-      case 'women': return 'قسم النساء';
-      case 'vip': return 'كبار الشخصيات (VIP)';
+      case 'men': return 'بوابة قسم الرجال 🤵';
+      case 'women': return 'بوابة قسم النساء 🌸';
+      case 'vip': return 'كبار الشخصيات (VIP) 👑';
       case 'groom_family': return 'أهل العريس';
       case 'bride_family': return 'أهل العروس';
       default: return 'الدعوة العامة';
@@ -52,7 +88,6 @@ export function EntryPassCard({
     setSavedSuccess(false);
 
     try {
-      // 1. Generate Blob for native iOS/Android Web Share API
       const blob = await toBlob(cardRef.current, {
         cacheBust: true,
         quality: 0.98,
@@ -73,7 +108,6 @@ export function EntryPassCard({
         }
       }
 
-      // Fallback: Download via data URL
       const dataUrl = await toPng(cardRef.current, {
         cacheBust: true,
         quality: 0.98,
@@ -91,7 +125,6 @@ export function EntryPassCard({
     }
   };
 
-  // Google Calendar URL prefilled with Asia/Riyadh timezone
   const cleanDate = eventDate.replace(/-/g, '');
   const cleanTime = eventTime.replace(/:/g, '').slice(0, 4) + '00';
   const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
@@ -109,8 +142,20 @@ export function EntryPassCard({
         ref={cardRef}
         className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-2 border-amber-500/40 p-6 text-amber-100 shadow-[0_0_40px_-10px_rgba(212,175,55,0.35)]"
       >
-        {/* Top Header */}
-        <div className="text-center pb-4 border-b border-amber-500/20">
+        {/* Anti-Screenshot Live Glowing Watermark Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-amber-500/20 text-[10px]">
+          <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-500/40 font-mono font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>رمز حي مباشر</span>
+          </div>
+
+          <div className="text-amber-400/80 font-mono font-bold">
+            {liveTime || 'LIVE PASS'}
+          </div>
+        </div>
+
+        {/* Top Title */}
+        <div className="text-center py-3">
           <div className="flex items-center justify-center gap-2 text-xs text-amber-400/80 uppercase tracking-widest font-semibold mb-1">
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span>بطاقة دخول رسمية • WEDDINGPASS</span>
@@ -121,8 +166,8 @@ export function EntryPassCard({
           </h2>
         </div>
 
-        {/* Guest Info Box */}
-        <div className="my-5 bg-slate-950/70 rounded-2xl p-4 border border-amber-500/20 space-y-3">
+        {/* Guest Info & Table Box */}
+        <div className="my-3 bg-slate-950/80 rounded-2xl p-4 border border-amber-500/20 space-y-3">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-xs text-amber-300/70">المدعو الكريم</p>
@@ -136,7 +181,7 @@ export function EntryPassCard({
 
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-amber-500/10 text-xs">
             <div>
-              <span className="text-amber-300/60 block">القسم:</span>
+              <span className="text-amber-300/60 block">القسم المخصص:</span>
               <span className="font-semibold text-amber-200">{getSectionLabel(section)}</span>
             </div>
             <div>
@@ -144,28 +189,52 @@ export function EntryPassCard({
               <span className="font-semibold text-amber-200 truncate block">{venueName}</span>
             </div>
           </div>
+
+          {/* Table Number (If Assigned) */}
+          {tableNumber && (
+            <div className="pt-2 border-t border-amber-500/10 flex items-center justify-between bg-amber-500/10 p-2 rounded-xl border border-amber-500/30">
+              <div className="flex items-center gap-1.5 text-xs text-amber-300 font-bold">
+                <Armchair className="w-4 h-4 text-amber-400" />
+                <span>مكان الجلوس المخصص:</span>
+              </div>
+              <span className="text-xs font-extrabold text-amber-100 gold-gradient-bg text-slate-950 px-2.5 py-0.5 rounded-lg">
+                {tableNumber}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* High-Resolution QR Code */}
-        <div className="bg-white rounded-2xl p-5 my-4 flex flex-col items-center justify-center shadow-inner border border-amber-300/40">
+        <div className="bg-white rounded-2xl p-5 my-3 flex flex-col items-center justify-center shadow-inner border border-amber-300/40 relative">
           <div className="p-2 bg-white rounded-xl">
             <QRCodeSVG
               value={passToken}
-              size={190}
+              size={185}
               level="H"
               includeMargin={false}
               fgColor="#0F172A"
               bgColor="#FFFFFF"
             />
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-slate-800 text-xs font-bold bg-amber-50 px-3 py-1 rounded-full border border-amber-300">
+          <div className="mt-2.5 flex items-center gap-1.5 text-slate-800 text-xs font-bold bg-amber-50 px-3 py-1 rounded-full border border-amber-300">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>رمز دخول خاص وموثق</span>
+            <span>رمز مشفر ومعتمد للبوابة</span>
           </div>
         </div>
 
+        {/* Women Section Etiquette Reminder */}
+        {isWomenSection && (
+          <div className="bg-pink-950/40 border border-pink-500/30 rounded-xl p-2.5 text-center text-[11px] text-pink-200 space-y-0.5 mb-2">
+            <div className="flex items-center justify-center gap-1.5 font-bold text-pink-300">
+              <CameraOff className="w-3.5 h-3.5" />
+              <span>ممنوع التصوير منعاً باتاً • جنة الأطفال منازلهم 👶</span>
+            </div>
+            <p className="text-[10px] text-pink-300/80">يرجى إبراز هذا الرمز عند مدخل الاستقبال لموظفة البوابة.</p>
+          </div>
+        )}
+
         <div className="text-center pt-1 text-[11px] text-amber-200/70 leading-relaxed">
-          <p>يرجى إبراز هذا الرمز عند بوابة القاعة لموظف الاستقبال لمرة واحدة.</p>
+          <p>يرجى إبراز هذا الرمز عند البوابة لموظف الاستقبال لمرة واحدة.</p>
         </div>
       </div>
 

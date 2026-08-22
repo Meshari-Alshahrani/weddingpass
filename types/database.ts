@@ -2,9 +2,17 @@ export type RSVPStatus = 'unopened' | 'viewed' | 'confirmed' | 'declined';
 export type DispatchStatus = 'draft' | 'whatsapp_opened' | 'sent';
 export type EntryPassStatus = 'active' | 'revoked';
 export type CheckInType = 'QR_SCAN' | 'MANUAL_SEARCH';
-export type ScanResult = 'SUCCESS' | 'ALREADY_CHECKED_IN' | 'REVOKED' | 'NOT_FOUND' | 'DECLINED' | 'MANUAL_OVERRIDE';
-export type SectionType = 'general' | 'men' | 'women' | 'vip' | 'groom_family' | 'bride_family';
+export type ScanResult =
+  | 'SUCCESS'
+  | 'ALREADY_CHECKED_IN'
+  | 'REVOKED'
+  | 'NOT_FOUND'
+  | 'DECLINED'
+  | 'MANUAL_OVERRIDE'
+  | 'CROSS_SECTION_WARNING';
+export type SectionType = 'men' | 'women' | 'vip' | 'groom_family' | 'bride_family' | 'general';
 export type GroupLimitMode = 'unlimited' | 'warning' | 'strict';
+export type HostRole = 'العريس' | 'والد العريس' | 'والد العروس' | 'قسم النساء' | string;
 
 export interface WeddingEvent {
   id: string;
@@ -27,13 +35,14 @@ export interface WeddingEvent {
 export interface GroupInviteLink {
   id: string;
   event_id: string;
+  host_name: HostRole;
   group_name: string; // e.g. "قروب زملاء العمل"
   slug: string; // e.g. "colleagues"
   limit_mode: GroupLimitMode; // 'unlimited' | 'warning' | 'strict'
   max_capacity?: number | null; // e.g. 30
   confirmed_count: number; // total attendees registered from this link
   max_seats_per_guest: number; // e.g. 2
-  section: string;
+  section: SectionType | string;
   is_active: boolean;
   created_at: string;
 }
@@ -41,6 +50,7 @@ export interface GroupInviteLink {
 export interface Party {
   id: string;
   event_id: string;
+  host_name: HostRole;
   group_link_id?: string | null;
   group_name?: string | null;
   party_name: string;
@@ -48,6 +58,7 @@ export interface Party {
   allowed_count: number;
   confirmed_count: number;
   actual_checked_in_count: number;
+  table_number?: string | null; // e.g. "طاولة 7"
   invitation_token_hash: string;
   raw_invitation_token?: string; // Only available during generation/admin views
   dispatch_status: DispatchStatus;
@@ -74,6 +85,8 @@ export interface EntryPass {
   raw_pass_token?: string; // Provided to guest UI / QR code
   status: EntryPassStatus;
   is_checked_in: boolean;
+  men_checked_in: number;
+  women_checked_in: number;
   first_check_in_at?: string | null;
   created_at: string;
   revoked_at?: string | null;
@@ -89,10 +102,23 @@ export interface Wish {
   created_at: string;
 }
 
+export interface EventMoment {
+  id: string;
+  event_id: string;
+  uploader_name: string;
+  uploader_phone?: string | null;
+  media_url: string; // Base64 data or storage URL
+  caption?: string | null;
+  section: string;
+  is_approved: boolean;
+  created_at: string;
+}
+
 export interface GateStation {
   id: string;
   event_id: string;
   station_name: string;
+  station_section: 'men' | 'women' | 'general';
   operator_username: string;
   is_active: boolean;
   created_at: string;
@@ -109,6 +135,7 @@ export interface CheckInLog {
   checkin_type: CheckInType;
   scan_result: ScanResult;
   admitted_count: number;
+  table_number?: string | null;
   metadata?: Record<string, any> | null;
   created_at: string;
 }
@@ -120,6 +147,9 @@ export interface CheckInRPCResponse {
   party_name?: string;
   admitted_count?: number;
   section?: string;
+  table_number?: string | null;
+  host_name?: string;
+  is_cross_section_warning?: boolean;
   check_in_time?: string;
   first_check_in_at?: string;
 }

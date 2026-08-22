@@ -1,23 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { executeCheckIn, searchParties } from '@/lib/db/store';
+import { executeCheckIn, searchParties, getDefaultEvent } from '@/lib/db/store';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { eventId, passToken, stationName, operatorName, checkinType, overrideCount } = body;
+    const { token, passToken, stationName, operatorName, checkinType, overrideCount, gateSection, forceCrossSection } = body;
 
-    if (!eventId || !passToken) {
+    const rawToken = token || passToken;
+    if (!rawToken) {
       return NextResponse.json(
-        { success: false, code: 'INVALID_REQUEST', message: 'يرجى تقديم معرف الحفل ورمز بطاقة الدخول' },
+        { success: false, code: 'INVALID_REQUEST', message: 'يرجى تقديم رمز بطاقة الدخول' },
         { status: 400 }
       );
     }
 
-    const station = stationName || 'البوابة الرئيسية';
+    const event = await getDefaultEvent();
+    const station = stationName || 'بوابة الاستقبال 1';
     const operator = operatorName || 'مشغل البوابة';
     const type = checkinType === 'MANUAL_SEARCH' ? 'MANUAL_SEARCH' : 'QR_SCAN';
 
-    const result = await executeCheckIn(eventId, passToken, station, operator, type, overrideCount);
+    const result = await executeCheckIn(
+      event.id,
+      rawToken,
+      station,
+      operator,
+      type,
+      overrideCount,
+      gateSection || 'men',
+      Boolean(forceCrossSection)
+    );
 
     return NextResponse.json(result);
   } catch (error: any) {
@@ -31,14 +42,14 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const eventId = searchParams.get('eventId');
     const query = searchParams.get('query');
 
-    if (!eventId || !query) {
+    const event = await getDefaultEvent();
+    if (!query) {
       return NextResponse.json({ success: false, parties: [] });
     }
 
-    const results = await searchParties(eventId, query);
+    const results = await searchParties(event.id, query);
     return NextResponse.json({ success: true, parties: results });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

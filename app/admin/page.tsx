@@ -5,6 +5,7 @@ import {
   getCheckInLogs,
   getAllGroupLinks,
   getWishes,
+  getMoments,
 } from '@/lib/db/store';
 import { AdminDashboard } from '@/components/AdminDashboard';
 
@@ -15,6 +16,7 @@ export default async function AdminPage() {
   const logs = await getCheckInLogs(event.id);
   const groupLinks = await getAllGroupLinks(event.id);
   const wishes = await getWishes(event.id);
+  const moments = await getMoments(event.id);
 
   return (
     <AdminDashboard
@@ -24,6 +26,7 @@ export default async function AdminPage() {
       initialLogs={logs}
       initialGroupLinks={groupLinks}
       initialWishes={wishes}
+      initialMoments={moments}
     />
   );
 }

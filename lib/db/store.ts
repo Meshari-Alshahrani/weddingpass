@@ -9,6 +9,8 @@ import {
   GroupInviteLink,
   GroupLimitMode,
   Wish,
+  EventMoment,
+  HostRole,
 } from '@/types/database';
 import { generateInvitationToken, generateEntryPassToken, hashToken } from '@/lib/crypto/tokens';
 import { normalizeSaudiPhone } from '@/lib/utils/phone';
@@ -38,6 +40,7 @@ interface DatabaseStore {
   entryPasses: Map<string, EntryPass>;
   groupLinks: Map<string, GroupInviteLink>; // slug -> GroupInviteLink
   wishes: Wish[];
+  moments: EventMoment[];
   checkInLogs: CheckInLog[];
   tokenToPartyMap: Map<string, string>; // rawInvitationToken -> partyId
   rawPassTokenMap: Map<string, string>; // rawPassToken -> partyId
@@ -55,6 +58,7 @@ function getDatabaseStore(): DatabaseStore {
       entryPasses: new Map(),
       groupLinks: new Map(),
       wishes: [],
+      moments: [],
       checkInLogs: [],
       tokenToPartyMap: new Map(),
       rawPassTokenMap: new Map(),
@@ -66,11 +70,12 @@ function getDatabaseStore(): DatabaseStore {
 }
 
 function seedDemoData(db: DatabaseStore) {
-  // 1. Seed Demo Smart Group Links
+  // 1. Seed Demo Smart Group Links (Default to Men and Groom)
   const demoGroups: GroupInviteLink[] = [
     {
       id: 'group_colleagues',
       event_id: DEFAULT_EVENT_ID,
+      host_name: 'العريس',
       group_name: 'قروب زملاء العمل 💼',
       slug: 'colleagues',
       limit_mode: 'warning',
@@ -84,19 +89,35 @@ function seedDemoData(db: DatabaseStore) {
     {
       id: 'group_family_youth',
       event_id: DEFAULT_EVENT_ID,
+      host_name: 'العريس',
       group_name: 'قروب شباب العائلة 👥',
       slug: 'family',
       limit_mode: 'unlimited',
       max_capacity: null,
       confirmed_count: 22,
       max_seats_per_guest: 2,
-      section: 'groom_family',
+      section: 'men',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 'group_father_elders',
+      event_id: DEFAULT_EVENT_ID,
+      host_name: 'والد العريس',
+      group_name: 'قروب وجهاء وأعيان القبيلة 👑',
+      slug: 'elders',
+      limit_mode: 'warning',
+      max_capacity: 40,
+      confirmed_count: 28,
+      max_seats_per_guest: 2,
+      section: 'men',
       is_active: true,
       created_at: new Date().toISOString(),
     },
     {
       id: 'group_friends',
       event_id: DEFAULT_EVENT_ID,
+      host_name: 'العريس',
       group_name: 'قروب الأصدقاء المقربين ✨',
       slug: 'friends',
       limit_mode: 'strict',
@@ -139,16 +160,43 @@ function seedDemoData(db: DatabaseStore) {
     },
   ];
 
-  // 3. Seed Demo Individual Parties
+  // 3. Seed Initial Moments (Men's Section Photos)
+  db.moments = [
+    {
+      id: 'moment_1',
+      event_id: DEFAULT_EVENT_ID,
+      uploader_name: 'فهد العتيبي',
+      uploader_phone: '0501234567',
+      media_url: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&auto=format&fit=crop&q=80',
+      caption: 'فرحة العريس سلمان بارك الله لهما 🗡️✨',
+      section: 'men',
+      is_approved: true,
+      created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+    },
+    {
+      id: 'moment_2',
+      event_id: DEFAULT_EVENT_ID,
+      uploader_name: 'سلطان القحطاني',
+      uploader_phone: '0555555555',
+      media_url: 'https://images.unsplash.com/photo-1469371670807-013ccf25f16a?w=800&auto=format&fit=crop&q=80',
+      caption: 'استقبال وجهاء القبيلة في القاعة الكبرى 🇸🇦',
+      section: 'men',
+      is_approved: true,
+      created_at: new Date(Date.now() - 3600000 * 1).toISOString(),
+    },
+  ];
+
+  // 4. Seed Demo Individual Parties with Hosts & Table Assignments
   const demoSeed = [
-    { name: 'أحمد محمد العتيبي (عائلة)', phone: '966501234567', allowed: 4, confirmed: 3, rsvp: 'confirmed' as RSVPStatus, section: 'men', group: 'دعوة خاصة' },
-    { name: 'د. خالد بن سلطان السبيعي', phone: '966551239876', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'vip', group: 'دعوة خاصة' },
-    { name: 'أم راشد الشمري', phone: '966567891234', allowed: 3, confirmed: 3, rsvp: 'confirmed' as RSVPStatus, section: 'women', group: 'دعوة خاصة' },
-    { name: 'المهندس طارق القحطاني', phone: '966543216789', allowed: 2, confirmed: 0, rsvp: 'declined' as RSVPStatus, section: 'men', group: 'قروب زملاء العمل 💼' },
-    { name: 'عبدالعزيز بن فهد التميمي', phone: '966509876543', allowed: 5, confirmed: 0, rsvp: 'viewed' as RSVPStatus, section: 'groom_family', group: 'قروب شباب العائلة 👥' },
-    { name: 'عائلة الدوسري الكريمة', phone: '966531122334', allowed: 4, confirmed: 0, rsvp: 'unopened' as RSVPStatus, section: 'bride_family', group: 'دعوة خاصة' },
-    { name: 'فيصل بن عبدالله الشهري', phone: '966548899001', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'men', group: 'قروب زملاء العمل 💼' },
-    { name: 'سارة بنت إبراهيم الراجحي', phone: '966599887766', allowed: 1, confirmed: 1, rsvp: 'confirmed' as RSVPStatus, section: 'women', group: 'دعوة خاصة' },
+    { name: 'أحمد محمد العتيبي (عائلة)', phone: '966501234567', allowed: 4, confirmed: 3, rsvp: 'confirmed' as RSVPStatus, section: 'men', host: 'العريس', table: 'طاولة 3', group: 'دعوة خاصة' },
+    { name: 'الشيخ سلطان بن مطلق السبيعي', phone: '966551239876', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'vip', host: 'والد العريس', table: 'طاولة كبار الشخصيات VIP', group: 'دعوة خاصة' },
+    { name: 'أم راشد الشمري الكريمة', phone: '966567891234', allowed: 3, confirmed: 3, rsvp: 'confirmed' as RSVPStatus, section: 'women', host: 'قسم النساء', table: 'طاولة 12 (نساء)', group: 'دعوة خاصة' },
+    { name: 'المهندس طارق القحطاني', phone: '966543216789', allowed: 2, confirmed: 0, rsvp: 'declined' as RSVPStatus, section: 'men', host: 'العريس', table: null, group: 'قروب زملاء العمل 💼' },
+    { name: 'عبدالعزيز بن فهد التميمي', phone: '966509876543', allowed: 5, confirmed: 0, rsvp: 'viewed' as RSVPStatus, section: 'men', host: 'العريس', table: null, group: 'قروب شباب العائلة 👥' },
+    { name: 'عائلة الدوسري الكريمة', phone: '966531122334', allowed: 4, confirmed: 0, rsvp: 'unopened' as RSVPStatus, section: 'women', host: 'والد العروس', table: 'طاولة 8', group: 'دعوة خاصة' },
+    { name: 'فيصل بن عبدالله الشهري', phone: '966548899001', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'men', host: 'العريس', table: 'طاولة 5', group: 'قروب زملاء العمل 💼' },
+    { name: 'سارة بنت إبراهيم الراجحي', phone: '966599887766', allowed: 1, confirmed: 1, rsvp: 'confirmed' as RSVPStatus, section: 'women', host: 'قسم النساء', table: 'طاولة 14 (نساء)', group: 'دعوة خاصة' },
+    { name: 'اللواء م. ناصر بن عائض القحطاني', phone: '966505554433', allowed: 2, confirmed: 2, rsvp: 'confirmed' as RSVPStatus, section: 'men', host: 'والد العريس', table: 'طاولة كبار الشخصيات VIP', group: 'قروب وجهاء وأعيان القبيلة 👑' },
   ];
 
   demoSeed.forEach((item, idx) => {
@@ -159,19 +207,21 @@ function seedDemoData(db: DatabaseStore) {
     const party: Party = {
       id: partyId,
       event_id: DEFAULT_EVENT_ID,
+      host_name: item.host,
       group_name: item.group,
       party_name: item.name,
       primary_phone: item.phone,
       allowed_count: item.allowed,
       confirmed_count: item.confirmed,
       actual_checked_in_count: 0,
+      table_number: item.table,
       invitation_token_hash: invHash,
       raw_invitation_token: rawInvToken,
       dispatch_status: item.rsvp !== 'unopened' ? 'sent' : 'draft',
       rsvp_status: item.rsvp,
       rsvp_at: item.rsvp === 'confirmed' ? new Date().toISOString() : null,
       section: item.section,
-      notes: idx === 0 ? 'يرجى تجهيز طاولة قريبة من المنصة' : null,
+      notes: idx === 0 ? 'يرجى تجهيز مقعد مريح' : null,
       created_at: new Date(Date.now() - (10 - idx) * 3600000).toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -189,6 +239,8 @@ function seedDemoData(db: DatabaseStore) {
         raw_pass_token: rawPassToken,
         status: 'active',
         is_checked_in: false,
+        men_checked_in: 0,
+        women_checked_in: 0,
         created_at: new Date().toISOString(),
       };
       db.entryPasses.set(partyId, entryPass);
@@ -265,6 +317,8 @@ export async function submitPartyRSVP(
         raw_pass_token: rawPassToken,
         status: 'active',
         is_checked_in: false,
+        men_checked_in: 0,
+        women_checked_in: 0,
         created_at: new Date().toISOString(),
       };
       db.entryPasses.set(partyId, pass);
@@ -284,6 +338,60 @@ export async function submitPartyRSVP(
     party.confirmed_count = 0;
     return { success: true, message: 'تم تسجيل اعتذارك شاكرين لك تواصلك ومشاعركم الطيبة' };
   }
+}
+
+// ------------------------------------------------------------------------------
+// Live Moments / Shared Album Engine
+// ------------------------------------------------------------------------------
+
+export async function addMoment(
+  eventId: string,
+  uploaderName: string,
+  mediaUrl: string,
+  caption?: string | null,
+  section: string = 'men',
+  uploaderPhone?: string | null
+): Promise<EventMoment> {
+  const db = getDatabaseStore();
+  const moment: EventMoment = {
+    id: `moment_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    event_id: eventId,
+    uploader_name: uploaderName.trim() || 'ضيف كريم',
+    uploader_phone: uploaderPhone ? normalizeSaudiPhone(uploaderPhone) : null,
+    media_url: mediaUrl,
+    caption: caption ? caption.trim() : null,
+    section: section || 'men',
+    is_approved: false, // Quarantined until organizer approves
+    created_at: new Date().toISOString(),
+  };
+
+  db.moments.unshift(moment);
+  return moment;
+}
+
+export async function getMoments(eventId: string, approvedOnly: boolean = false): Promise<EventMoment[]> {
+  const db = getDatabaseStore();
+  return db.moments.filter((m) => m.event_id === eventId && (!approvedOnly || m.is_approved));
+}
+
+export async function toggleMomentApproval(momentId: string, isApproved: boolean): Promise<boolean> {
+  const db = getDatabaseStore();
+  const moment = db.moments.find((m) => m.id === momentId);
+  if (moment) {
+    moment.is_approved = isApproved;
+    return true;
+  }
+  return false;
+}
+
+export async function deleteMoment(momentId: string): Promise<boolean> {
+  const db = getDatabaseStore();
+  const idx = db.moments.findIndex((m) => m.id === momentId);
+  if (idx !== -1) {
+    db.moments.splice(idx, 1);
+    return true;
+  }
+  return false;
 }
 
 // ------------------------------------------------------------------------------
@@ -349,10 +457,11 @@ export async function createGroupLink(
   eventId: string,
   groupName: string,
   slug: string,
+  hostName: HostRole = 'العريس',
   limitMode: GroupLimitMode = 'warning',
   maxCapacity?: number | null,
   maxSeatsPerGuest: number = 2,
-  section: string = 'general'
+  section: string = 'men'
 ): Promise<GroupInviteLink> {
   const db = getDatabaseStore();
   const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
@@ -360,13 +469,14 @@ export async function createGroupLink(
   const newGroup: GroupInviteLink = {
     id: `grp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     event_id: eventId,
+    host_name: hostName || 'العريس',
     group_name: groupName.trim(),
     slug: cleanSlug,
     limit_mode: limitMode,
     max_capacity: limitMode === 'unlimited' ? null : maxCapacity || 30,
     confirmed_count: 0,
     max_seats_per_guest: maxSeatsPerGuest || 2,
-    section: section || 'general',
+    section: section || 'men',
     is_active: true,
     created_at: new Date().toISOString(),
   };
@@ -375,9 +485,6 @@ export async function createGroupLink(
   return newGroup;
 }
 
-/**
- * Fast 2-tap self registration for WhatsApp group links with duplicate detection and quota control.
- */
 export async function registerGroupGuest(
   slug: string,
   guestName: string,
@@ -395,7 +502,7 @@ export async function registerGroupGuest(
   const normalizedPhone = normalizeSaudiPhone(guestPhone);
   const seats = Math.min(Math.max(1, seatsCount), group.max_seats_per_guest);
 
-  // 1. Check if phone already registered for this event (Duplicate Recovery)
+  // 1. Phone Duplicate Check for this event
   if (normalizedPhone) {
     for (const p of Array.from(db.parties.values())) {
       if (p.event_id === event.id && p.primary_phone === normalizedPhone) {
@@ -410,6 +517,8 @@ export async function registerGroupGuest(
             raw_pass_token: rawPassToken,
             status: 'active',
             is_checked_in: false,
+            men_checked_in: 0,
+            women_checked_in: 0,
             created_at: new Date().toISOString(),
           };
           db.entryPasses.set(p.id, pass);
@@ -431,7 +540,7 @@ export async function registerGroupGuest(
     }
   }
 
-  // 2. Check Strict Quota Limit (if in strict mode)
+  // 2. Strict Quota Check
   if (group.limit_mode === 'strict' && group.max_capacity) {
     if (group.confirmed_count + seats > group.max_capacity) {
       const remaining = Math.max(0, group.max_capacity - group.confirmed_count);
@@ -453,6 +562,7 @@ export async function registerGroupGuest(
   const newParty: Party = {
     id: partyId,
     event_id: event.id,
+    host_name: group.host_name || 'العريس',
     group_link_id: group.id,
     group_name: group.group_name,
     party_name: guestName.trim(),
@@ -460,12 +570,13 @@ export async function registerGroupGuest(
     allowed_count: seats,
     confirmed_count: seats,
     actual_checked_in_count: 0,
+    table_number: null,
     invitation_token_hash: invHash,
     raw_invitation_token: rawInvToken,
     dispatch_status: 'sent',
     rsvp_status: 'confirmed',
     rsvp_at: new Date().toISOString(),
-    section: group.section,
+    section: group.section || 'men',
     notes: notes || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -474,7 +585,6 @@ export async function registerGroupGuest(
   db.parties.set(partyId, newParty);
   db.tokenToPartyMap.set(rawInvToken, partyId);
 
-  // Generate Entry Pass
   const rawPassToken = generateEntryPassToken();
   const passHash = await hashToken(rawPassToken);
   const entryPass: EntryPass = {
@@ -484,16 +594,16 @@ export async function registerGroupGuest(
     raw_pass_token: rawPassToken,
     status: 'active',
     is_checked_in: false,
+    men_checked_in: 0,
+    women_checked_in: 0,
     created_at: new Date().toISOString(),
   };
 
   db.entryPasses.set(partyId, entryPass);
   db.rawPassTokenMap.set(rawPassToken, partyId);
 
-  // Increment group count
   group.confirmed_count += seats;
 
-  // Add Wish to Guestbook if provided
   if (notes && notes.trim().length > 3) {
     await addWish(event.id, guestName.trim(), notes.trim(), partyId, true);
   }
@@ -527,6 +637,8 @@ export async function recoverGuestPassByPhone(eventId: string, rawPhone: string)
           raw_pass_token: rawPassToken,
           status: 'active',
           is_checked_in: false,
+          men_checked_in: 0,
+          women_checked_in: 0,
           created_at: new Date().toISOString(),
         };
         db.entryPasses.set(p.id, pass);
@@ -545,9 +657,17 @@ export async function recoverGuestPassByPhone(eventId: string, rawPhone: string)
   return { success: false, message: 'لم يتم العثور على أي حجز مسجل بهذا الرقم في هذه المناسبة' };
 }
 
-/**
- * Returns all active passes for offline pre-fetching at the door scanner
- */
+export async function updatePartyTableNumber(partyId: string, tableNumber?: string | null): Promise<boolean> {
+  const db = getDatabaseStore();
+  const party = db.parties.get(partyId);
+  if (party) {
+    party.table_number = tableNumber ? tableNumber.trim() : null;
+    party.updated_at = new Date().toISOString();
+    return true;
+  }
+  return false;
+}
+
 export async function getActivePassesForOfflineCache(eventId: string) {
   const db = getDatabaseStore();
   const parties = Array.from(db.parties.values()).filter((p) => p.event_id === eventId);
@@ -563,6 +683,8 @@ export async function getActivePassesForOfflineCache(eventId: string) {
         rawPassToken: pass.raw_pass_token,
         confirmedCount: party.confirmed_count || party.allowed_count,
         section: party.section,
+        tableNumber: party.table_number || null,
+        hostName: party.host_name || 'العريس',
         isCheckedIn: pass.is_checked_in,
       });
     }
@@ -572,7 +694,7 @@ export async function getActivePassesForOfflineCache(eventId: string) {
 }
 
 // ------------------------------------------------------------------------------
-// Check-In & Admin Functions
+// Gate Check-In with Cross-Section Alerts & Table Routing
 // ------------------------------------------------------------------------------
 
 export async function executeCheckIn(
@@ -581,7 +703,9 @@ export async function executeCheckIn(
   stationName: string,
   operatorName: string,
   checkinType: 'QR_SCAN' | 'MANUAL_SEARCH' = 'QR_SCAN',
-  overrideCount?: number
+  overrideCount?: number,
+  gateSection: 'men' | 'women' | 'general' = 'men',
+  forceAdmitCrossSection: boolean = false
 ): Promise<CheckInRPCResponse> {
   const db = getDatabaseStore();
   const trimmed = rawPassToken.trim();
@@ -643,6 +767,7 @@ export async function executeCheckIn(
       checkin_type: checkinType,
       scan_result: 'REVOKED',
       admitted_count: 0,
+      table_number: party.table_number,
       created_at: new Date().toISOString(),
     });
 
@@ -652,6 +777,36 @@ export async function executeCheckIn(
       party_name: party.party_name,
       message: 'تم إلغاء صلاحية هذه البطاقة مسبقاً من قِبل المنظم',
     };
+  }
+
+  // Cross-Section Warning Check
+  if (!forceAdmitCrossSection && gateSection !== 'general') {
+    const isWomenPass = party.section === 'women';
+    const isMenPass = party.section === 'men' || party.section === 'vip' || party.section === 'groom_family';
+
+    if (gateSection === 'men' && isWomenPass) {
+      return {
+        success: false,
+        code: 'CROSS_SECTION_WARNING',
+        is_cross_section_warning: true,
+        party_name: party.party_name,
+        section: party.section,
+        table_number: party.table_number,
+        message: '⚠️ تنبيه: هذه البطاقة مخصصة لقسم النساء 🧕 - يرجى توجيه الضيفة للبوابة النسائية.',
+      };
+    }
+
+    if (gateSection === 'women' && isMenPass) {
+      return {
+        success: false,
+        code: 'CROSS_SECTION_WARNING',
+        is_cross_section_warning: true,
+        party_name: party.party_name,
+        section: party.section,
+        table_number: party.table_number,
+        message: '⚠️ تنبيه: هذه البطاقة مخصصة لقسم الرجال 🤵 - يرجى توجيه الضيف لبوابة الرجال.',
+      };
+    }
   }
 
   if (pass.is_checked_in) {
@@ -666,6 +821,7 @@ export async function executeCheckIn(
       checkin_type: checkinType,
       scan_result: 'ALREADY_CHECKED_IN',
       admitted_count: 0,
+      table_number: party.table_number,
       created_at: new Date().toISOString(),
     });
 
@@ -673,6 +829,7 @@ export async function executeCheckIn(
       success: false,
       code: 'ALREADY_CHECKED_IN',
       party_name: party.party_name,
+      table_number: party.table_number,
       first_check_in_at: pass.first_check_in_at || undefined,
       message: 'تم استخدام بطاقة الدخول هذه مسبقاً!',
     };
@@ -696,6 +853,7 @@ export async function executeCheckIn(
     checkin_type: checkinType,
     scan_result: 'SUCCESS',
     admitted_count: finalCount,
+    table_number: party.table_number,
     created_at: new Date().toISOString(),
   });
 
@@ -705,8 +863,12 @@ export async function executeCheckIn(
     party_name: party.party_name,
     admitted_count: finalCount,
     section: party.section,
+    table_number: party.table_number || null,
+    host_name: party.host_name,
     check_in_time: pass.first_check_in_at,
-    message: 'تم التحقق بنجاح، أهلاً وسهلاً بكم!',
+    message: party.table_number
+      ? `تم التحقق بنجاح • ${party.table_number}`
+      : 'تم التحقق بنجاح • أهلاً وسهلاً بكم!',
   };
 }
 
@@ -717,7 +879,7 @@ export async function getAllParties(eventId: string): Promise<Party[]> {
 
 export async function bulkAddParties(
   eventId: string,
-  rawGuests: Array<{ party_name: string; primary_phone?: string; allowed_count?: number; section?: string; notes?: string }>
+  rawGuests: Array<{ party_name: string; primary_phone?: string; allowed_count?: number; section?: string; host_name?: string; table_number?: string; notes?: string }>
 ): Promise<{ addedCount: number; parties: Party[] }> {
   const db = getDatabaseStore();
   const newParties: Party[] = [];
@@ -731,17 +893,19 @@ export async function bulkAddParties(
     const party: Party = {
       id: partyId,
       event_id: eventId,
+      host_name: (raw.host_name as HostRole) || 'العريس',
       group_name: 'دعوة خاصة',
       party_name: raw.party_name.trim(),
       primary_phone: normalizedPhone,
       allowed_count: raw.allowed_count ? Math.max(1, Number(raw.allowed_count)) : 1,
       confirmed_count: 0,
       actual_checked_in_count: 0,
+      table_number: raw.table_number ? raw.table_number.trim() : null,
       invitation_token_hash: invHash,
       raw_invitation_token: rawInvToken,
       dispatch_status: 'draft',
       rsvp_status: 'unopened',
-      section: raw.section || 'general',
+      section: raw.section || 'men', // Default to men
       notes: raw.notes || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -790,6 +954,8 @@ export async function regeneratePass(partyId: string): Promise<EntryPass | null>
     raw_pass_token: rawPassToken,
     status: 'active',
     is_checked_in: false,
+    men_checked_in: 0,
+    women_checked_in: 0,
     created_at: new Date().toISOString(),
   };
 
@@ -814,6 +980,20 @@ export async function getEventStats(eventId: string) {
   const usedPasses = passes.filter((p) => p.is_checked_in).length;
   const totalAdmittedIndividuals = parties.reduce((acc, p) => acc + (p.actual_checked_in_count || 0), 0);
 
+  // Host Breakdown Stats
+  const hosts = ['العريس', 'والد العريس', 'والد العروس', 'قسم النساء'];
+  const hostStats = hosts.map((h) => {
+    const hostParties = parties.filter((p) => (p.host_name || 'العريس') === h);
+    const hostConfirmed = hostParties.filter((p) => p.rsvp_status === 'confirmed').reduce((acc, p) => acc + p.confirmed_count, 0);
+    const hostAdmitted = hostParties.reduce((acc, p) => acc + (p.actual_checked_in_count || 0), 0);
+    return {
+      hostName: h,
+      totalInvites: hostParties.length,
+      confirmedGuests: hostConfirmed,
+      admittedGuests: hostAdmitted,
+    };
+  });
+
   return {
     totalParties,
     maxPotentialGuests,
@@ -825,27 +1005,13 @@ export async function getEventStats(eventId: string) {
     usedPasses,
     totalAdmittedIndividuals,
     attendanceRate: expectedGuests > 0 ? Math.round((totalAdmittedIndividuals / expectedGuests) * 100) : 0,
+    hostStats,
   };
 }
 
 export async function getCheckInLogs(eventId: string): Promise<CheckInLog[]> {
   const db = getDatabaseStore();
   return db.checkInLogs.filter((log) => log.event_id === eventId);
-}
-
-export async function searchParties(eventId: string, query: string): Promise<Party[]> {
-  const db = getDatabaseStore();
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-
-  return Array.from(db.parties.values()).filter((p) => {
-    if (p.event_id !== eventId) return false;
-    const nameMatch = p.party_name.toLowerCase().includes(q);
-    const phoneMatch = p.primary_phone?.includes(q) || false;
-    const notesMatch = p.notes?.toLowerCase().includes(q) || false;
-    const groupMatch = p.group_name?.toLowerCase().includes(q) || false;
-    return nameMatch || phoneMatch || notesMatch || groupMatch;
-  });
 }
 
 export async function updateEventSettings(eventId: string, updates: Partial<WeddingEvent>): Promise<WeddingEvent | null> {
@@ -860,3 +1026,20 @@ export async function updateEventSettings(eventId: string, updates: Partial<Wedd
   db.events.set(eventId, updated);
   return updated;
 }
+
+export async function searchParties(eventId: string, query: string): Promise<Party[]> {
+  const db = getDatabaseStore();
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  return Array.from(db.parties.values()).filter((p) => {
+    if (p.event_id !== eventId) return false;
+    const nameMatch = p.party_name.toLowerCase().includes(q);
+    const phoneMatch = p.primary_phone?.includes(q) || false;
+    const notesMatch = p.notes?.toLowerCase().includes(q) || false;
+    const groupMatch = p.group_name?.toLowerCase().includes(q) || false;
+    const tableMatch = p.table_number?.toLowerCase().includes(q) || false;
+    return nameMatch || phoneMatch || notesMatch || groupMatch || tableMatch;
+  });
+}
+

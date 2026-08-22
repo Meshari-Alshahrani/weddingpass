@@ -4,5 +4,5 @@ import { GateScanner } from '@/components/GateScanner';
 export default async function CheckInPage() {
   const event = await getDefaultEvent();
 
-  return <GateScanner eventId={event.id} />;
+  return <GateScanner initialEvent={event} />;
 }

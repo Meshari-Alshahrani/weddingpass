@@ -1,13 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { WeddingEvent, Party, CheckInLog, GroupInviteLink, GroupLimitMode, Wish } from '@/types/database';
+import { WeddingEvent, Party, CheckInLog, GroupInviteLink, GroupLimitMode, Wish, EventMoment, HostRole } from '@/types/database';
 import * as XLSX from 'xlsx';
 import {
   Users,
   UserCheck,
   UserX,
-  Clock,
   Sparkles,
   QrCode,
   Upload,
@@ -33,6 +32,10 @@ import {
   Bell,
   Eye,
   EyeOff,
+  Camera,
+  Armchair,
+  Trash2,
+  Filter,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -43,6 +46,7 @@ interface AdminDashboardProps {
   initialLogs: CheckInLog[];
   initialGroupLinks?: GroupInviteLink[];
   initialWishes?: Wish[];
+  initialMoments?: EventMoment[];
 }
 
 export function AdminDashboard({
@@ -52,6 +56,7 @@ export function AdminDashboard({
   initialLogs,
   initialGroupLinks = [],
   initialWishes = [],
+  initialMoments = [],
 }: AdminDashboardProps) {
   const [mounted, setMounted] = useState(false);
   const [event, setEvent] = useState<WeddingEvent>(initialEvent);
@@ -60,12 +65,14 @@ export function AdminDashboard({
   const [logs, setLogs] = useState<CheckInLog[]>(initialLogs);
   const [groupLinks, setGroupLinks] = useState<GroupInviteLink[]>(initialGroupLinks);
   const [wishes, setWishes] = useState<Wish[]>(initialWishes);
+  const [moments, setMoments] = useState<EventMoment[]>(initialMoments);
   const [originUrl, setOriginUrl] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'all' | 'groups' | 'confirmed' | 'missing' | 'reminders' | 'wishes' | 'declined'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'groups' | 'confirmed' | 'missing' | 'reminders' | 'wishes' | 'moments' | 'declined'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSection, setSelectedSection] = useState<string>('all');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
+  const [selectedHostFilter, setSelectedHostFilter] = useState<string>('all');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // Guide helper state
@@ -89,10 +96,11 @@ export function AdminDashboard({
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupSlug, setNewGroupSlug] = useState('');
+  const [newGroupHost, setNewGroupHost] = useState<HostRole>('العريس');
   const [newGroupLimitMode, setNewGroupLimitMode] = useState<GroupLimitMode>('warning');
   const [newGroupCapacity, setNewGroupCapacity] = useState<number>(30);
   const [newGroupMaxSeats, setNewGroupMaxSeats] = useState<number>(2);
-  const [newGroupSection, setNewGroupSection] = useState<string>('general');
+  const [newGroupSection, setNewGroupSection] = useState<string>('men'); // Default to men
   const [creatingGroup, setCreatingGroup] = useState(false);
 
   // Excel Import state
@@ -104,13 +112,27 @@ export function AdminDashboard({
   const [isAddManualOpen, setIsAddManualOpen] = useState(false);
   const [manualName, setManualName] = useState('');
   const [manualPhone, setManualPhone] = useState('');
+  const [manualHost, setManualHost] = useState<HostRole>('العريس');
+  const [manualTable, setManualTable] = useState('');
   const [manualAllowed, setManualAllowed] = useState(2);
-  const [manualSection, setManualSection] = useState('general');
+  const [manualSection, setManualSection] = useState('men'); // Default to men
+
+  // Inline Table Edit Modal
+  const [editingTableParty, setEditingTableParty] = useState<Party | null>(null);
+  const [tableInput, setTableInput] = useState('');
 
   useEffect(() => {
     setMounted(true);
     if (typeof window !== 'undefined') {
       setOriginUrl(window.location.origin);
+      const params = new URLSearchParams(window.location.search);
+      const hostParam = params.get('host');
+      if (hostParam) {
+        if (hostParam === 'father_groom' || hostParam.includes('والد العريس')) setSelectedHostFilter('والد العريس');
+        else if (hostParam === 'father_bride' || hostParam.includes('والد العروس')) setSelectedHostFilter('والد العروس');
+        else if (hostParam === 'women' || hostParam.includes('نساء')) setSelectedHostFilter('قسم النساء');
+        else setSelectedHostFilter(hostParam);
+      }
     }
   }, []);
 
@@ -125,6 +147,7 @@ export function AdminDashboard({
         setLogs(data.logs);
         if (data.groupLinks) setGroupLinks(data.groupLinks);
         if (data.wishes) setWishes(data.wishes);
+        if (data.moments) setMoments(data.moments);
       }
     } catch (err) {
       console.error('Failed to refresh data:', err);
@@ -141,6 +164,53 @@ export function AdminDashboard({
       refreshData();
     } catch (err) {
       console.error('Toggle wish error:', err);
+    }
+  };
+
+  const handleToggleMoment = async (momentId: string, currentStatus: boolean) => {
+    try {
+      await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle_moment_approval', momentId, isApproved: !currentStatus }),
+      });
+      refreshData();
+    } catch (err) {
+      console.error('Toggle moment error:', err);
+    }
+  };
+
+  const handleDeleteMoment = async (momentId: string) => {
+    if (!confirm('هل تريد بالتأكيد حذف هذه الصورة من الألبوم؟')) return;
+    try {
+      await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_moment', momentId }),
+      });
+      refreshData();
+    } catch (err) {
+      console.error('Delete moment error:', err);
+    }
+  };
+
+  const handleSaveTableNumber = async () => {
+    if (!editingTableParty) return;
+    try {
+      await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_party_table',
+          partyId: editingTableParty.id,
+          tableNumber: tableInput.trim() || null,
+        }),
+      });
+      setEditingTableParty(null);
+      setTableInput('');
+      refreshData();
+    } catch (err) {
+      console.error('Save table error:', err);
     }
   };
 
@@ -191,10 +261,11 @@ export function AdminDashboard({
           action: 'create_group_link',
           groupName: newGroupName.trim(),
           slug: newGroupSlug.trim(),
+          hostName: newGroupHost,
           limitMode: newGroupLimitMode,
           maxCapacity: newGroupLimitMode === 'unlimited' ? null : newGroupCapacity,
           maxSeatsPerGuest: newGroupMaxSeats,
-          section: newGroupSection,
+          section: newGroupSection || 'men',
         }),
       });
 
@@ -319,7 +390,9 @@ ${inviteUrl}
           party_name: row.name || row.الاسم || row.المدعو || 'ضيف كريم',
           primary_phone: phone,
           allowed_count: Number(row.allowed_guests || row.العدد || row.المرافقين || 1),
-          section: row.section || row.القسم || 'general',
+          section: row.section || row.القسم || 'men', // Default to men
+          host_name: row.host || row.الداعي || 'العريس',
+          table_number: row.table || row.الطاولة || null,
           notes: row.notes || row.ملاحظات || '',
         };
       });
@@ -365,6 +438,8 @@ ${inviteUrl}
               primary_phone: manualPhone.trim(),
               allowed_count: manualAllowed,
               section: manualSection,
+              host_name: manualHost,
+              table_number: manualTable.trim() || null,
             },
           ],
         }),
@@ -374,6 +449,7 @@ ${inviteUrl}
         setIsAddManualOpen(false);
         setManualName('');
         setManualPhone('');
+        setManualTable('');
         refreshData();
       }
     } catch (err) {
@@ -382,11 +458,13 @@ ${inviteUrl}
   };
 
   const handleExportAttendanceExcel = () => {
-    const exportData = parties.map((p) => ({
+    const exportData = filteredParties.map((p) => ({
       'اسم المدعو': p.party_name,
+      'الداعي': p.host_name || 'العريس',
+      'رقم الطاولة': p.table_number || 'عام',
       'المجموعة / القروب': p.group_name || 'دعوة خاصة',
       'رقم الجوال': p.primary_phone || '',
-      'القسم': p.section,
+      'القسم': p.section === 'men' ? 'رجال' : p.section === 'women' ? 'نساء' : p.section,
       'العدد المسموح': p.allowed_count,
       'العدد المؤكد': p.confirmed_count,
       'العدد الفعلي الواصل': p.actual_checked_in_count,
@@ -398,18 +476,20 @@ ${inviteUrl}
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'تقرير الحضور');
-    XLSX.writeFile(wb, `WeddingPass-Attendance-${event.slug}.xlsx`);
+    XLSX.writeFile(wb, `WeddingPass-${selectedHostFilter}-${event.slug}.xlsx`);
   };
 
   const filteredParties = parties.filter((party) => {
     const matchesSearch =
       party.party_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (party.primary_phone && party.primary_phone.includes(searchQuery));
+      (party.primary_phone && party.primary_phone.includes(searchQuery)) ||
+      (party.table_number && party.table_number.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesSection = selectedSection === 'all' || party.section === selectedSection;
     const matchesGroup = selectedGroupFilter === 'all' || party.group_name === selectedGroupFilter;
+    const matchesHost = selectedHostFilter === 'all' || (party.host_name || 'العريس') === selectedHostFilter;
 
-    if (!matchesSearch || !matchesSection || !matchesGroup) return false;
+    if (!matchesSearch || !matchesSection || !matchesGroup || !matchesHost) return false;
 
     if (activeTab === 'confirmed') return party.rsvp_status === 'confirmed';
     if (activeTab === 'reminders') return party.rsvp_status === 'confirmed' && party.actual_checked_in_count === 0;
@@ -426,7 +506,7 @@ ${inviteUrl}
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-amber-400 mb-1">
             <Sparkles className="w-4 h-4" />
-            <span>لوحة تحكم المنظم • WEDDINGPASS</span>
+            <span>لوحة تحكم المنظم الشاملة • WEDDINGPASS</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold font-serif gold-gradient-text">
             حفل زفاف {event.groom_name} & {event.bride_name}
@@ -446,6 +526,15 @@ ${inviteUrl}
             <span>الرئيسية</span>
           </Link>
 
+          <Link
+            href="/moments"
+            target="_blank"
+            className="py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <Camera className="w-4 h-4" />
+            <span>ألبوم الحفل</span>
+          </Link>
+
           <button
             onClick={() => setShowGuide(!showGuide)}
             className="py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -459,7 +548,7 @@ ${inviteUrl}
             className="py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Settings className="w-4 h-4 text-amber-400" />
-            <span>إعدادات وتصميم الحفل</span>
+            <span>إعدادات الحفل</span>
           </button>
 
           <Link
@@ -467,7 +556,7 @@ ${inviteUrl}
             className="py-2.5 px-4 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-2 transition-colors"
           >
             <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
-            <span>شاشة المراقبة المباشرة</span>
+            <span>شاشة القاعة المباشرة</span>
           </Link>
 
           <Link
@@ -481,13 +570,76 @@ ${inviteUrl}
         </div>
       </header>
 
+      {/* Host Breakdown Cards (نظام الداعين المتعددين) */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <Users className="w-4 h-4 text-amber-400" />
+            <span>إحصائيات الداعين المتعددين (Multi-Host Overview)</span>
+          </h2>
+          {selectedHostFilter !== 'all' && (
+            <button
+              onClick={() => setSelectedHostFilter('all')}
+              className="text-xs text-amber-400 hover:underline flex items-center gap-1"
+            >
+              <Filter className="w-3 h-3" />
+              <span>إلغاء التصفية وعرض الكل</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {(stats.hostStats || []).map((h: any) => {
+            const isSelected = selectedHostFilter === h.hostName;
+
+            return (
+              <button
+                key={h.hostName}
+                onClick={() => setSelectedHostFilter(isSelected ? 'all' : h.hostName)}
+                className={`p-4 rounded-2xl border text-right transition-all cursor-pointer ${
+                  isSelected
+                    ? 'gold-gradient-bg text-slate-950 border-amber-400 shadow-lg scale-[1.02]'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-200 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <span className={`text-xs font-bold ${isSelected ? 'text-slate-950' : 'text-amber-300'}`}>
+                    {h.hostName === 'العريس' ? '🤵 العريس' : h.hostName === 'والد العريس' ? '👔 والد العريس' : h.hostName === 'والد العروس' ? '👑 والد العروس' : '🌸 قسم النساء'}
+                  </span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${isSelected ? 'bg-slate-950 text-amber-300' : 'bg-slate-950 border border-slate-800 text-slate-400'}`}>
+                    {h.totalInvites} دعوة
+                  </span>
+                </div>
+
+                <div className="mt-3 flex justify-between items-end">
+                  <div>
+                    <span className={`text-2xl font-extrabold ${isSelected ? 'text-slate-950' : 'text-slate-100'}`}>
+                      {h.confirmedGuests}
+                    </span>
+                    <span className={`text-[10px] block ${isSelected ? 'text-slate-800' : 'text-slate-400'}`}>
+                      مؤكد الحضور
+                    </span>
+                  </div>
+
+                  <div className="text-left">
+                    <span className={`text-xs font-bold ${isSelected ? 'text-slate-900' : 'text-emerald-400'}`}>
+                      {h.admittedGuests} دخلوا
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       {/* Guide Banner */}
       {showGuide && (
         <section className="bg-slate-900/90 rounded-3xl border border-amber-500/30 p-6 space-y-4 animate-fadeIn">
           <div className="flex justify-between items-center border-b border-amber-500/20 pb-3">
             <h3 className="text-sm font-bold text-amber-200 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>دليل استخدام WeddingPass (خطوات سريعة وسلسة)</span>
+              <span>دليل استخدام WeddingPass الشامل</span>
             </h3>
             <button onClick={() => setShowGuide(false)} className="text-slate-400 hover:text-slate-200 text-xs">
               إغلاق الدليل ✕
@@ -499,9 +651,9 @@ ${inviteUrl}
               <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-xs">
                 1
               </div>
-              <h4 className="text-xs font-bold text-slate-100">روابط القروبات (Smart Group Links)</h4>
+              <h4 className="text-xs font-bold text-slate-100">روابط القروبات وتدفق الرجال السريع</h4>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                انسخ رابط القروب للواتساب بنقرة واحدة، ليسجل الضيف نفسه دون الحاجة لإدخال أرقامهم بنفسك.
+                أنشئ روابط للقروبات ليقوم المعازيم بتسجيل أسمائهم واستلام باركود الدخول مباشرة في ثوانٍ.
               </p>
             </div>
 
@@ -509,19 +661,19 @@ ${inviteUrl}
               <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs">
                 2
               </div>
-              <h4 className="text-xs font-bold text-slate-100">تذكير المؤكدين قبل الزواج</h4>
+              <h4 className="text-xs font-bold text-slate-100">تسكين وتوجيه الطاولات</h4>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                من تبويب &quot;تذكير المؤكدين&quot;، أرسل رسائل تذكير لطيفة برابط بطاقة الدخول قبل الحفل بيوم.
+                حدد أرقام الطاولات لكبار الشخصيات والمعازيم لتظهر فوراً على شاشة الماسح عند البوابة لتوجيههم.
               </p>
             </div>
 
             <div className="p-4 bg-slate-950/70 rounded-2xl border border-slate-800 space-y-2">
-              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center text-xs">
+              <div className="w-7 h-7 rounded-lg bg-pink-500/20 text-pink-400 font-bold flex items-center justify-center text-xs">
                 3
               </div>
-              <h4 className="text-xs font-bold text-slate-100">دفتر التهاني وشاشة القاعة</h4>
+              <h4 className="text-xs font-bold text-slate-100">ألبوم لقطات الحفل والتهاني</h4>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                راجع تبريكات الضيوف واعتمد المناسب منها للعرض المباشر على شاشة العرض الكبرى في القاعة.
+                راجع صور العرضة وتهاني المعازيم واعتمد المناسب منها للعرض المباشر وشاشات القاعة.
               </p>
             </div>
           </div>
@@ -565,7 +717,12 @@ ${inviteUrl}
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-sm font-bold text-slate-100">{grp.group_name}</h3>
-                    <span className="text-[10px] text-slate-400 font-mono">/join/{grp.slug}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                        {grp.host_name || 'العريس'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">/join/{grp.slug}</span>
+                    </div>
                   </div>
 
                   <span
@@ -633,64 +790,7 @@ ${inviteUrl}
         </div>
       </section>
 
-      {/* KPI Stats Grid */}
-      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-1">
-          <span className="text-xs text-slate-400 flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5 text-amber-400" />
-            <span>إجمالي الدعوات</span>
-          </span>
-          <p className="text-2xl font-bold text-slate-100">{stats.totalParties}</p>
-          <span className="text-[11px] text-slate-500">طاقة استيعاب: {stats.maxPotentialGuests} فرد</span>
-        </div>
-
-        <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-1">
-          <span className="text-xs text-slate-400 flex items-center gap-1.5">
-            <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>أكدوا الحضور</span>
-          </span>
-          <p className="text-2xl font-bold text-emerald-400">{stats.confirmedParties}</p>
-          <span className="text-[11px] text-emerald-500/80">{stats.expectedGuests} أشخاص متوقعين</span>
-        </div>
-
-        <div className="bg-slate-900/90 p-4 rounded-2xl border border-emerald-500/30 space-y-1 bg-emerald-950/10">
-          <span className="text-xs text-emerald-300 flex items-center gap-1.5">
-            <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-            <span>دخلوا القاعة فعلياً</span>
-          </span>
-          <p className="text-2xl font-extrabold text-emerald-300">{stats.totalAdmittedIndividuals}</p>
-          <span className="text-[11px] text-emerald-400/80">{stats.usedPasses} بطاقة مستخدمة</span>
-        </div>
-
-        <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-1">
-          <span className="text-xs text-slate-400 flex items-center gap-1.5">
-            <UserX className="w-3.5 h-3.5 text-rose-400" />
-            <span>اعتذروا</span>
-          </span>
-          <p className="text-2xl font-bold text-rose-400">{stats.declinedParties}</p>
-          <span className="text-[11px] text-rose-500/80">اعتذار رسمي</span>
-        </div>
-
-        <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-1">
-          <span className="text-xs text-slate-400 flex items-center gap-1.5">
-            <MessageSquareHeart className="w-3.5 h-3.5 text-pink-400" />
-            <span>دفتر التهاني</span>
-          </span>
-          <p className="text-2xl font-bold text-pink-300">{wishes.length}</p>
-          <span className="text-[11px] text-pink-400/80">{wishes.filter((w) => w.is_approved).length} معتمد للشاشة</span>
-        </div>
-
-        <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-1">
-          <span className="text-xs text-slate-400 flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-cyan-400" />
-            <span>نسبة الحضور</span>
-          </span>
-          <p className="text-2xl font-bold text-cyan-300">{stats.attendanceRate}%</p>
-          <span className="text-[11px] text-cyan-400/70">من المؤكدين</span>
-        </div>
-      </section>
-
-      {/* Main Operations Area */}
+      {/* Main Operations Tabs & Area */}
       <section className="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 space-y-6 shadow-xl">
         {/* Action Controls Bar */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -720,6 +820,15 @@ ${inviteUrl}
             >
               <Bell className="w-3.5 h-3.5" />
               <span>تذكير المؤكدين ({stats.confirmedParties - stats.usedPasses})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('moments')}
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                activeTab === 'moments' ? 'bg-cyan-600 text-white' : 'bg-slate-950 text-cyan-400 hover:text-cyan-300'
+              }`}
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>ألبوم الحفل ({moments.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('wishes')}
@@ -768,8 +877,80 @@ ${inviteUrl}
           </div>
         </div>
 
+        {/* MOMENTS TAB CONTENT */}
+        {activeTab === 'moments' && (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="flex justify-between items-center bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+              <div className="text-xs">
+                <span className="font-bold text-cyan-300">ألبوم لقطات الحفل المباشر (Live Moments)</span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  الصور المعتمدة فقط تظهر في صفحة الألبوم العامة للضيوف.
+                </p>
+              </div>
+              <Link
+                href="/moments"
+                target="_blank"
+                className="py-1.5 px-3 rounded-xl gold-gradient-bg text-slate-950 text-xs font-bold flex items-center gap-1 hover:brightness-110"
+              >
+                <span>معاينة صفحة الألبوم</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {moments.length === 0 && (
+                <div className="col-span-3 text-center py-10 text-slate-500 text-xs">
+                  لا توجد أي صور مرفوعة حتى الآن
+                </div>
+              )}
+
+              {moments.map((m) => (
+                <div
+                  key={m.id}
+                  className={`p-3 rounded-2xl border space-y-2.5 transition-all ${
+                    m.is_approved ? 'bg-slate-950 border-cyan-500/40' : 'bg-slate-950/60 border-amber-500/40'
+                  }`}
+                >
+                  <div className="rounded-xl overflow-hidden aspect-video bg-slate-900 border border-slate-800">
+                    <img src={m.media_url} alt="لحظة حفل" className="w-full h-full object-cover" />
+                  </div>
+
+                  <div className="flex justify-between items-start text-xs">
+                    <div>
+                      <span className="font-bold text-slate-100">{m.uploader_name}</span>
+                      {m.caption && <p className="text-[11px] text-slate-300 mt-0.5">{m.caption}</p>}
+                    </div>
+
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => handleToggleMoment(m.id, m.is_approved)}
+                        className={`p-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          m.is_approved
+                            ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        }`}
+                        title={m.is_approved ? 'حجب من الألبوم' : 'اعتماد ونشر في الألبوم'}
+                      >
+                        {m.is_approved ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteMoment(m.id)}
+                        className="p-1.5 rounded-lg bg-rose-950/40 text-rose-300 border border-rose-800/40 hover:bg-rose-900/60 transition-colors cursor-pointer"
+                        title="حذف الصورة"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* WISHES TAB CONTENT */}
-        {activeTab === 'wishes' ? (
+        {activeTab === 'wishes' && (
           <div className="space-y-4 animate-fadeIn">
             <div className="flex justify-between items-center bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
               <div className="text-xs">
@@ -825,20 +1006,36 @@ ${inviteUrl}
               ))}
             </div>
           </div>
-        ) : (
-          /* GUESTS TABLE & FILTERS */
+        )}
+
+        {/* GUESTS TABLE & FILTERS (When not wishes or moments) */}
+        {activeTab !== 'wishes' && activeTab !== 'moments' && (
           <>
             {/* Search & Filter Bar */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div className="relative">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="ابحث باسم المدعو أو رقم الجوال..."
+                  placeholder="ابحث باسم المدعو أو الجوال أو رقم الطاولة..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-4 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
                 />
                 <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+              </div>
+
+              <div>
+                <select
+                  value={selectedHostFilter}
+                  onChange={(e) => setSelectedHostFilter(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer"
+                >
+                  <option value="all">كل الداعين (الداعي: الكل)</option>
+                  <option value="العريس">العريس 🤵</option>
+                  <option value="والد العريس">والد العريس 👔</option>
+                  <option value="والد العروس">والد العروس 👑</option>
+                  <option value="قسم النساء">قسم النساء 🌸</option>
+                </select>
               </div>
 
               <div>
@@ -863,12 +1060,10 @@ ${inviteUrl}
                   onChange={(e) => setSelectedSection(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-slate-200 focus:outline-none focus:border-amber-400 cursor-pointer"
                 >
-                  <option value="all">كل الأقسام والتصنيفات</option>
-                  <option value="men">قسم الرجال</option>
-                  <option value="women">قسم النساء</option>
-                  <option value="vip">كبار الشخصيات (VIP)</option>
-                  <option value="groom_family">أهل العريس</option>
-                  <option value="bride_family">أهل العروس</option>
+                  <option value="all">كل الأقسام</option>
+                  <option value="men">قسم الرجال 🤵</option>
+                  <option value="women">قسم النساء 🌸</option>
+                  <option value="vip">كبار الشخصيات VIP</option>
                 </select>
               </div>
             </div>
@@ -879,18 +1074,19 @@ ${inviteUrl}
                 <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
                   <tr>
                     <th className="p-3.5 font-semibold">المدعو الكريم</th>
-                    <th className="p-3.5 font-semibold">المجموعة / المصدر</th>
-                    <th className="p-3.5 font-semibold">الجوال</th>
+                    <th className="p-3.5 font-semibold">الداعي</th>
+                    <th className="p-3.5 font-semibold">رقم الطاولة</th>
+                    <th className="p-3.5 font-semibold">المجموعة</th>
                     <th className="p-3.5 font-semibold">العدد المسموح / المؤكد</th>
                     <th className="p-3.5 font-semibold">حالة الدعوة</th>
-                    <th className="p-3.5 font-semibold">حالة الدخول بالقاعة</th>
+                    <th className="p-3.5 font-semibold">حالة الدخول</th>
                     <th className="p-3.5 font-semibold text-center">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {filteredParties.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-500">
+                      <td colSpan={8} className="p-8 text-center text-slate-500">
                         لا يوجد أي مدعوين يطابقون خيارات البحث الحالية
                       </td>
                     </tr>
@@ -902,17 +1098,38 @@ ${inviteUrl}
                       <tr key={party.id} className="hover:bg-slate-800/40 transition-colors">
                         <td className="p-3.5">
                           <div className="font-bold text-slate-100">{party.party_name}</div>
+                          {party.primary_phone && (
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5" dir="ltr">
+                              {party.primary_phone}
+                            </div>
+                          )}
                           {party.notes && <div className="text-[10px] text-amber-300/80 mt-0.5">{party.notes}</div>}
                         </td>
 
                         <td className="p-3.5">
-                          <span className="bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-[10px] font-semibold text-amber-300">
-                            {party.group_name || 'دعوة خاصة'}
+                          <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                            {party.host_name || 'العريس'}
                           </span>
                         </td>
 
-                        <td className="p-3.5 text-slate-300 font-mono text-[11px]" dir="ltr">
-                          {party.primary_phone || <span className="text-slate-500">-</span>}
+                        {/* Table Number with inline edit */}
+                        <td className="p-3.5">
+                          <button
+                            onClick={() => {
+                              setEditingTableParty(party);
+                              setTableInput(party.table_number || '');
+                            }}
+                            className="bg-slate-950 hover:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700 text-[11px] font-bold text-amber-200 flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Armchair className="w-3 h-3 text-amber-400" />
+                            <span>{party.table_number || 'تحديد طاولة'}</span>
+                          </button>
+                        </td>
+
+                        <td className="p-3.5">
+                          <span className="bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-[10px] font-semibold text-slate-300">
+                            {party.group_name || 'دعوة خاصة'}
+                          </span>
                         </td>
 
                         <td className="p-3.5">
@@ -963,15 +1180,14 @@ ${inviteUrl}
 
                         <td className="p-3.5 text-center">
                           <div className="flex items-center justify-center gap-1.5">
-                            {/* Reminder or WhatsApp dispatch */}
-                            {activeTab === 'reminders' || party.rsvp_status === 'confirmed' ? (
+                            {party.rsvp_status === 'confirmed' ? (
                               <button
                                 onClick={() => handleSendReminderWhatsApp(party)}
                                 className="py-1 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
                                 title="إرسال تذكير بموعد الحفل والبطاقة"
                               >
                                 <Bell className="w-3.5 h-3.5" />
-                                <span>تذكير واتساب</span>
+                                <span>تذكير</span>
                               </button>
                             ) : (
                               <button
@@ -1024,6 +1240,45 @@ ${inviteUrl}
         )}
       </section>
 
+      {/* Edit Table Modal */}
+      {editingTableParty && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 text-right">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <Armchair className="w-4 h-4 text-amber-400" />
+              <span>تحديد رقم الطاولة لـ ({editingTableParty.party_name})</span>
+            </h3>
+
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">رقم الطاولة أو اسم المنطقة:</label>
+              <input
+                type="text"
+                value={tableInput}
+                onChange={(e) => setTableInput(e.target.value)}
+                placeholder="مثال: طاولة 5، طاولة VIP، طاولة أهل العروس"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => setEditingTableParty(null)}
+                className="py-2 px-3.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleSaveTableNumber}
+                className="py-2 px-4 rounded-xl gold-gradient-bg text-slate-950 text-xs font-bold cursor-pointer"
+              >
+                حفظ التعيين
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Smart Group Link Modal */}
       {isCreateGroupOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -1032,25 +1287,38 @@ ${inviteUrl}
               <Link2 className="w-4 h-4 text-amber-400" />
               <span>إنشاء رابط مخصص لقروب واتساب</span>
             </h3>
-            <p className="text-xs text-slate-400">
-              أنشئ رابطاً لمشاركته في قروب محدد ليسجل أعضاء القروب أنفسهم تلقائياً:
-            </p>
 
             <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-300 block mb-1 font-semibold">اسم القروب أو المجموعة *</label>
-                <input
-                  type="text"
-                  value={newGroupName}
-                  onChange={(e) => {
-                    setNewGroupName(e.target.value);
-                    if (!newGroupSlug) {
-                      setNewGroupSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20));
-                    }
-                  }}
-                  placeholder="مثال: قروب زملاء العمل، قروب الاستراحة"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-300 block mb-1 font-semibold">اسم القروب *</label>
+                  <input
+                    type="text"
+                    value={newGroupName}
+                    onChange={(e) => {
+                      setNewGroupName(e.target.value);
+                      if (!newGroupSlug) {
+                        setNewGroupSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20));
+                      }
+                    }}
+                    placeholder="مثال: قروب زملاء العمل"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-300 block mb-1 font-semibold">الداعي المسؤول</label>
+                  <select
+                    value={newGroupHost}
+                    onChange={(e) => setNewGroupHost(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400 cursor-pointer"
+                  >
+                    <option value="العريس">العريس 🤵</option>
+                    <option value="والد العريس">والد العريس 👔</option>
+                    <option value="والد العروس">والد العروس 👑</option>
+                    <option value="قسم النساء">قسم النساء 🌸</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -1067,9 +1335,8 @@ ${inviteUrl}
                 </div>
               </div>
 
-              {/* Quota Limit Mode */}
               <div>
-                <label className="text-slate-300 block mb-1 font-semibold">نمط سعة القروب (Quota Mode)</label>
+                <label className="text-slate-300 block mb-1 font-semibold">نمط سعة القروب</label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
@@ -1145,9 +1412,8 @@ ${inviteUrl}
                     onChange={(e) => setNewGroupSection(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400"
                   >
-                    <option value="general">عام</option>
-                    <option value="men">رجال</option>
-                    <option value="women">نساء</option>
+                    <option value="men">قسم الرجال 🤵</option>
+                    <option value="women">قسم النساء 🌸</option>
                     <option value="vip">VIP</option>
                   </select>
                 </div>
@@ -1173,7 +1439,7 @@ ${inviteUrl}
         </div>
       )}
 
-      {/* Wedding Settings & Card Image Modal */}
+      {/* Wedding Settings Modal */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
@@ -1289,19 +1555,6 @@ ${inviteUrl}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400"
                 />
               </div>
-
-              <div>
-                <label className="text-slate-300 block mb-1 font-semibold">ثيم التصميم والألوان</label>
-                <select
-                  value={editTheme}
-                  onChange={(e) => setEditTheme(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400 cursor-pointer"
-                >
-                  <option value="classic_gold">الذهب الأسود الملكي (Classic Gold Luxury)</option>
-                  <option value="modern_royal">الزمرد الرخامي (Modern Royal Emerald)</option>
-                  <option value="soft_romantic">الوردي الهادئ (Soft Romantic Rose)</option>
-                </select>
-              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
@@ -1349,7 +1602,7 @@ ${inviteUrl}
               <div>
                 <p className="text-xs font-semibold text-slate-200">اختر ملف Excel (.xlsx أو .csv)</p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  الأعمدة المدعومة: الاسم (name)، الجوال (phone)، العدد (allowed_guests)، القسم (section)
+                  الأعمدة: الاسم (name)، الجوال (phone)، العدد (allowed_guests)، القسم (section)، الداعي (host)، الطاولة (table)
                 </p>
               </div>
               <input
@@ -1378,7 +1631,7 @@ ${inviteUrl}
                     className="flex justify-between items-center text-xs p-2 bg-slate-900 rounded-lg border border-slate-800"
                   >
                     <span className="font-bold text-slate-200">{row.party_name}</span>
-                    <span className="text-slate-400">{row.primary_phone || 'بدون هاتف'}</span>
+                    <span className="text-slate-400">{row.host_name || 'العريس'}</span>
                     <span className="text-amber-300">{row.allowed_count} أفراد</span>
                   </div>
                 ))}
@@ -1412,7 +1665,7 @@ ${inviteUrl}
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="text-slate-400 block mb-1">اسم المدعو / العائلة</label>
+                <label className="text-slate-400 block mb-1">اسم المدعو / العائلة *</label>
                 <input
                   type="text"
                   value={manualName}
@@ -1422,6 +1675,33 @@ ${inviteUrl}
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block mb-1">الداعي المسؤول</label>
+                  <select
+                    value={manualHost}
+                    onChange={(e) => setManualHost(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400 cursor-pointer"
+                  >
+                    <option value="العريس">العريس 🤵</option>
+                    <option value="والد العريس">والد العريس 👔</option>
+                    <option value="والد العروس">والد العروس 👑</option>
+                    <option value="قسم النساء">قسم النساء 🌸</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1">رقم الطاولة (اختياري)</label>
+                  <input
+                    type="text"
+                    value={manualTable}
+                    onChange={(e) => setManualTable(e.target.value)}
+                    placeholder="مثال: طاولة 5"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-slate-400 block mb-1">رقم الجوال (اختياري)</label>
                 <input
@@ -1429,7 +1709,8 @@ ${inviteUrl}
                   value={manualPhone}
                   onChange={(e) => setManualPhone(e.target.value)}
                   placeholder="05XXXXXXXX"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400 font-mono"
+                  dir="ltr"
                 />
               </div>
 
@@ -1453,9 +1734,8 @@ ${inviteUrl}
                     onChange={(e) => setManualSection(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-slate-100 focus:outline-none focus:border-amber-400"
                   >
-                    <option value="general">عام</option>
-                    <option value="men">رجال</option>
-                    <option value="women">نساء</option>
+                    <option value="men">قسم الرجال 🤵</option>
+                    <option value="women">قسم النساء 🌸</option>
                     <option value="vip">VIP</option>
                   </select>
                 </div>

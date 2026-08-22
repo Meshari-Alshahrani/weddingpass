@@ -14,6 +14,11 @@ import {
   getWishes,
   addWish,
   toggleWishApproval,
+  getMoments,
+  addMoment,
+  toggleMomentApproval,
+  deleteMoment,
+  updatePartyTableNumber,
 } from '@/lib/db/store';
 
 export async function GET(req: NextRequest) {
@@ -24,6 +29,7 @@ export async function GET(req: NextRequest) {
     const logs = await getCheckInLogs(event.id);
     const groupLinks = await getAllGroupLinks(event.id);
     const wishes = await getWishes(event.id);
+    const moments = await getMoments(event.id);
 
     return NextResponse.json({
       success: true,
@@ -33,6 +39,7 @@ export async function GET(req: NextRequest) {
       logs: logs.slice(0, 50),
       groupLinks,
       wishes,
+      moments,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -45,6 +52,42 @@ export async function POST(req: NextRequest) {
     const { action } = body;
 
     const event = await getDefaultEvent();
+
+    if (action === 'add_moment') {
+      const { uploaderName, mediaUrl, caption, section, uploaderPhone } = body;
+      if (!mediaUrl) {
+        return NextResponse.json({ success: false, message: 'يرجى تقديم رابط أو ملف الصورة' }, { status: 400 });
+      }
+
+      const moment = await addMoment(
+        event.id,
+        uploaderName || 'ضيف كريم',
+        mediaUrl,
+        caption,
+        section || 'men',
+        uploaderPhone
+      );
+
+      return NextResponse.json({ success: true, moment, message: 'تم إرسال الصورة للمراجعة والاعتماد بنجاح' });
+    }
+
+    if (action === 'toggle_moment_approval') {
+      const { momentId, isApproved } = body;
+      const ok = await toggleMomentApproval(momentId, isApproved);
+      return NextResponse.json({ success: ok });
+    }
+
+    if (action === 'delete_moment') {
+      const { momentId } = body;
+      const ok = await deleteMoment(momentId);
+      return NextResponse.json({ success: ok });
+    }
+
+    if (action === 'update_party_table') {
+      const { partyId, tableNumber } = body;
+      const ok = await updatePartyTableNumber(partyId, tableNumber);
+      return NextResponse.json({ success: ok });
+    }
 
     if (action === 'add_wish') {
       const { partyName, message, partyId } = body;
@@ -63,7 +106,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'create_group_link') {
-      const { groupName, slug, limitMode, maxCapacity, maxSeatsPerGuest, section } = body;
+      const { groupName, slug, hostName, limitMode, maxCapacity, maxSeatsPerGuest, section } = body;
       if (!groupName || !slug) {
         return NextResponse.json({ success: false, message: 'يرجى كتابة اسم القروب والرابط' }, { status: 400 });
       }
@@ -72,10 +115,11 @@ export async function POST(req: NextRequest) {
         event.id,
         groupName,
         slug,
+        hostName || 'العريس',
         limitMode || 'warning',
         maxCapacity,
         maxSeatsPerGuest || 2,
-        section || 'general'
+        section || 'men'
       );
 
       return NextResponse.json({

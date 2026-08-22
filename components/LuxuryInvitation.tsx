@@ -11,14 +11,16 @@ import {
   Heart,
   Sparkles,
   Check,
-  X,
-  UserCheck,
   Navigation,
   CalendarPlus,
   Home,
   MessageSquareHeart,
   Send,
   ExternalLink,
+  CameraOff,
+  Baby,
+  Camera,
+  Image as ImageIcon,
   Download,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -49,6 +51,8 @@ export function LuxuryInvitation({
   const [loading, setLoading] = useState(false);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+
+  const isWomen = party.section === 'women';
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number }>({
@@ -198,8 +202,14 @@ export function LuxuryInvitation({
             <Home className="w-3.5 h-3.5" />
             <span>WeddingPass</span>
           </Link>
-          <span className="text-[11px] text-amber-300/80 bg-amber-500/10 px-3 py-0.5 rounded-full border border-amber-500/20 font-semibold">
-            دعوة خاصة
+          <span
+            className={`text-[11px] px-3 py-0.5 rounded-full border font-semibold ${
+              isWomen
+                ? 'text-pink-300 bg-pink-500/10 border-pink-500/30'
+                : 'text-amber-300/80 bg-amber-500/10 border-amber-500/20'
+            }`}
+          >
+            {isWomen ? 'دعوة خاصة • قسم النساء 🌸' : 'دعوة خاصة • قسم الرجال 🤵'}
           </span>
         </div>
 
@@ -220,7 +230,8 @@ export function LuxuryInvitation({
 
           {/* Invitation Target Person Header */}
           <div className="inline-block px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs font-semibold">
-            دعوة خاصة لكريمة / لكريم: <span className="text-amber-100 font-bold">{party.party_name}</span>
+            {isWomen ? 'دعوة خاصة لكريمة: ' : 'دعوة خاصة لكريم / لعائلة: '}
+            <span className="text-amber-100 font-bold">{party.party_name}</span>
           </div>
 
           {/* Custom Card Image (If provided) */}
@@ -249,6 +260,26 @@ export function LuxuryInvitation({
               <p className="text-xs text-amber-200/60 font-serif">
                 وذلك بمشيئة الله تعالى وتوفيقه
               </p>
+            </div>
+          )}
+
+          {/* Women Section Strict Etiquette Box */}
+          {isWomen && (
+            <div className="bg-pink-950/30 border border-pink-500/40 rounded-2xl p-3.5 text-right space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-pink-300 border-b border-pink-500/20 pb-1.5">
+                <CameraOff className="w-4 h-4 text-pink-400" />
+                <span>ضوابط وتعليمات قسم النساء الكريمة</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-pink-200/90">
+                <div className="flex items-center gap-1.5 bg-slate-950/60 p-2 rounded-xl border border-pink-500/20">
+                  <CameraOff className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                  <span>يمنع التصوير منعاً باتاً 📷</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-slate-950/60 p-2 rounded-xl border border-pink-500/20">
+                  <Baby className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                  <span>جنة الأطفال منازلهم 👶</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -334,9 +365,8 @@ export function LuxuryInvitation({
           )}
         </div>
 
-        {/* Action Selection Box (The 3 Single-Screen Choices) */}
+        {/* Action Selection Box */}
         {rsvpStatus === 'confirmed' && (entryPass || initialEntryPass) ? (
-          /* If Confirmed -> Show Boarding Pass Directly */
           <div className="space-y-3 animate-fadeIn">
             <div className="p-3 bg-emerald-950/40 border border-emerald-500/40 rounded-2xl text-center">
               <span className="text-xs text-emerald-300 font-bold flex items-center justify-center gap-1.5">
@@ -349,6 +379,7 @@ export function LuxuryInvitation({
               partyName={party.party_name}
               confirmedCount={selectedCount}
               section={party.section}
+              tableNumber={party.table_number}
               passToken={entryPass?.raw_pass_token || initialEntryPass?.raw_pass_token || `wp_pass_${party.id}`}
               eventGroom={event.groom_name}
               eventBride={event.bride_name}
@@ -358,7 +389,28 @@ export function LuxuryInvitation({
               venueMapsUrl={event.venue_maps_url}
             />
 
-            {/* Optional Wish note if not added yet */}
+            {/* Men Section Photo Moments Drop Banner */}
+            {!isWomen && (
+              <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-4 text-right space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                    <Camera className="w-4 h-4 text-amber-400" />
+                    <span>ألبوم لقطات الحفل والعرضة 📸</span>
+                  </div>
+                  <Link
+                    href="/moments"
+                    className="py-1.5 px-3 rounded-xl gold-gradient-bg text-slate-950 text-xs font-bold flex items-center gap-1 hover:brightness-110"
+                  >
+                    <span>فتح الألبوم</span>
+                  </Link>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  شارك العريس لقطاتك وصورك العفوية في القاعة لتوثيق هذه الليلة المباركة.
+                </p>
+              </div>
+            )}
+
+            {/* Wishes Input */}
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-right space-y-2">
               <label className="text-xs font-semibold text-amber-300/90 flex items-center gap-1.5">
                 <MessageSquareHeart className="w-3.5 h-3.5 text-amber-400" />
@@ -383,7 +435,6 @@ export function LuxuryInvitation({
             </div>
           </div>
         ) : (
-          /* Single-Screen 3 Direct Action Buttons */
           <div className="rounded-3xl bg-slate-900/90 backdrop-blur-2xl border border-amber-500/30 p-5 shadow-xl text-right space-y-4">
             <div className="text-center pb-2 border-b border-amber-500/10">
               <p className="text-xs font-bold text-amber-100">
@@ -400,7 +451,7 @@ export function LuxuryInvitation({
                   className="w-full py-3.5 px-4 rounded-2xl gold-gradient-bg text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer"
                 >
                   <span>👑</span>
-                  <span>سأشرفكم بحضوري الكريم</span>
+                  <span>{isWomen ? 'سأشرفكم بحضوري الكريم' : 'سأشرفكم بحضوري'}</span>
                 </button>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -425,12 +476,12 @@ export function LuxuryInvitation({
               </div>
             )}
 
-            {/* Scenario 1: Attending Flow */}
+            {/* Attending Flow */}
             {activeAction === 'attending' && (
               <div className="space-y-4 animate-fadeIn">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-semibold text-amber-300">
-                    كم شخصاً سيحضر من هذه الدعوة؟
+                    {isWomen ? 'كم عدد السيدات الحاضرات من هذه الدعوة؟' : 'كم عدد الرجال الحاضرين من هذه الدعوة؟'}
                   </label>
                   <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                     الحد الأقصى: {party.allowed_count} {party.allowed_count === 1 ? 'شخص' : 'أشخاص'}
@@ -449,7 +500,7 @@ export function LuxuryInvitation({
                           : 'bg-slate-950 border-slate-700 text-slate-300'
                       }`}
                     >
-                      {num === 1 ? 'شخص واحد' : `${num} أشخاص`}
+                      {num === 1 ? (isWomen ? 'سيدة واحدة' : 'شخص واحد') : `${num} أشخاص`}
                     </button>
                   ))}
                 </div>
@@ -485,7 +536,7 @@ export function LuxuryInvitation({
               </div>
             )}
 
-            {/* Scenario 2: Declined Flow */}
+            {/* Declined Flow */}
             {activeAction === 'declined' && (
               <div className="space-y-3 animate-fadeIn text-center">
                 <p className="text-xs text-amber-200/90 leading-relaxed">
@@ -523,7 +574,7 @@ export function LuxuryInvitation({
               </div>
             )}
 
-            {/* Scenario 3: Wish Only Flow */}
+            {/* Wish Only Flow */}
             {activeAction === 'wish' && (
               <div className="space-y-3 animate-fadeIn">
                 <div className="space-y-1 text-right">
