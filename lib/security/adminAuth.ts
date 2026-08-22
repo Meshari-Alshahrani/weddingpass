@@ -90,13 +90,13 @@ export async function getVerifiedAdminSession(req: NextRequest, targetEventOwner
         if (!error && data?.user) {
           const user = data.user;
           const userRole = user.app_metadata?.role || user.user_metadata?.role;
-          const isOwner = targetEventOwnerId ? user.id === targetEventOwnerId : true;
+          const isOwner = targetEventOwnerId ? user.id === targetEventOwnerId : false;
           const isAdmin = userRole === 'admin' || userRole === 'owner' || userRole === 'superadmin' || isOwner;
 
           if (isAdmin) {
             return {
               adminId: user.id,
-              role: (userRole as any) || 'owner',
+              role: (userRole as any) || (isOwner ? 'owner' : 'organizer'),
               expiresAt: Date.now() + 3600000,
             };
           }

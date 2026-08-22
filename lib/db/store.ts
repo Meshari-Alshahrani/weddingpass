@@ -258,16 +258,27 @@ function seedDemoData(db: DatabaseStore) {
 }
 
 // ------------------------------------------------------------------------------
-// Service Functions (Repository Pattern)
+// Service Functions (Repository Pattern - Production Fail-Closed Architecture)
 // ------------------------------------------------------------------------------
 
+export function assertProductionDatabase(): void {
+  if (process.env.NODE_ENV === 'production' && (!isSupabaseConfigured || !supabaseAdmin)) {
+    throw new Error('FATAL SECURITY ERROR: Supabase PostgreSQL database is required in production. Refusing in-memory fallback to preserve data integrity.');
+  }
+}
+
 export async function getDefaultEvent(): Promise<WeddingEvent> {
+  assertProductionDatabase();
   if (isSupabaseConfigured && supabaseAdmin) {
     try {
-      const { data } = await supabaseAdmin.from('events').select('*').limit(1).single();
-      if (data) return data as WeddingEvent;
+      const { data, error } = await supabaseAdmin.from('events').select('*').limit(1).single();
+      if (!error && data) return data as WeddingEvent;
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`FATAL: Failed to load event from Supabase database: ${error?.message}`);
+      }
     } catch (err) {
-      console.warn('Supabase getDefaultEvent fallback:', err);
+      if (process.env.NODE_ENV === 'production') throw err;
+      console.warn('Supabase getDefaultEvent fallback to local mock:', err);
     }
   }
   const db = getDatabaseStore();

@@ -18,28 +18,46 @@ export async function POST(req: NextRequest) {
 
     if (!mediaUrl || typeof mediaUrl !== 'string') {
       return NextResponse.json(
-        { success: false, message: 'يرجى تقديم رابط أو ملف الصورة' },
+        { success: false, message: 'يرجى تقديم ملف أو رابط الصورة' },
         { status: 400 }
       );
     }
 
-    const event = await getDefaultEvent();
-    const cleanName = (uploaderName || 'ضيف كريم').replace(/[<>"']/g, '').trim();
-    const cleanCaption = (caption || '').replace(/[<>"']/g, '').trim();
+    // Enforce payload bounds
+    if (mediaUrl.length > 5 * 1024 * 1024) {
+      return NextResponse.json(
+        { success: false, message: 'حجم الصورة كبير جداً (الحد الأقصى 5 ميجابايت)' },
+        { status: 413 }
+      );
+    }
 
+    const cleanName = (typeof uploaderName === 'string' ? uploaderName : 'ضيف كريم')
+      .replace(/[<>"']/g, '')
+      .trim()
+      .slice(0, 80);
+
+    const cleanCaption = (typeof caption === 'string' ? caption : '')
+      .replace(/[<>"']/g, '')
+      .trim()
+      .slice(0, 200);
+
+    const cleanPhone = typeof uploaderPhone === 'string' ? uploaderPhone.trim().slice(0, 20) : undefined;
+    const cleanSection = section === 'women' ? 'women' : 'men';
+
+    const event = await getDefaultEvent();
     const moment = await addMoment(
       event.id,
       cleanName,
       mediaUrl,
       cleanCaption,
-      section || 'men',
-      uploaderPhone
+      cleanSection,
+      cleanPhone
     );
 
     return NextResponse.json({
       success: true,
       moment,
-      message: 'تم إرسال الصورة بنجاح وستظهر في ألبوم الحفل بعد مراجعة المشرف 📸',
+      message: 'تم استلام الصورة بنجاح وستظهر في ألبوم الحفل بعد اعتماد المشرف 📸',
     });
   } catch (error: any) {
     return NextResponse.json(

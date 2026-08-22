@@ -1,6 +1,8 @@
 import { getDefaultEvent, getEventStats, getCheckInLogs, getWishes } from '@/lib/db/store';
 import { LiveMonitor } from '@/components/LiveMonitor';
 
+export const dynamic = 'force-dynamic';
+
 export default async function LiveMonitorPage() {
   const event = await getDefaultEvent();
   const stats = await getEventStats(event.id);
