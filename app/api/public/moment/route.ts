@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDefaultEvent, addMoment } from '@/lib/db/store';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
-import { validateBase64Image } from '@/lib/security/imageValidation';
+import { validateImagePayload } from '@/lib/security/imageValidation';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { uploaderName, mediaUrl, caption, section, uploaderPhone } = body;
 
+    // Enforce payload bounds (max 5 MB)
     if (!mediaUrl || typeof mediaUrl !== 'string') {
       return NextResponse.json(
         { success: false, message: 'يرجى تقديم ملف أو رابط الصورة' },
@@ -24,7 +25,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Enforce payload bounds (max 5 MB)
     if (mediaUrl.length > 5 * 1024 * 1024) {
       return NextResponse.json(
         { success: false, message: 'حجم الصورة كبير جداً (الحد الأقصى 5 ميجابايت)' },
@@ -32,15 +32,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Mandatory Binary Magic Bytes Verification for Data URIs & Base64 uploads
-    if (mediaUrl.startsWith('data:') || !mediaUrl.startsWith('http')) {
-      const magicCheck = validateBase64Image(mediaUrl);
-      if (!magicCheck.valid) {
-        return NextResponse.json(
-          { success: false, message: magicCheck.error || 'الملف المرفوع ليس صورة صالحة' },
-          { status: 400 }
-        );
-      }
+    // Mandatory Image Validation (Binary Magic Bytes for Base64, and Safe Extension/Domain for URLs)
+    const imageCheck = validateImagePayload(mediaUrl);
+    if (!imageCheck.valid) {
+      return NextResponse.json(
+        { success: false, message: imageCheck.error || 'الملف المرفوع ليس صورة صالحة' },
+        { status: 400 }
+      );
     }
 
     const cleanName = (typeof uploaderName === 'string' ? uploaderName : 'ضيف كريم')

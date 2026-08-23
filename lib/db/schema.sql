@@ -327,14 +327,12 @@ CREATE POLICY "Service role full access entry_passes" ON public.entry_passes FOR
 CREATE POLICY "Service role full access check_in_logs" ON public.check_in_logs FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 CREATE POLICY "Service role full access group_links" ON public.group_links FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
--- سياسات ألبوم اللحظات
+-- سياسات ألبوم اللحظات (خاضعة للتحقق والحجر الصحي بالخادم)
 CREATE POLICY "Public read approved moments" ON public.moments FOR SELECT USING (is_approved = true);
-CREATE POLICY "Public insert moments" ON public.moments FOR INSERT WITH CHECK (true);
 CREATE POLICY "Service role full access moments" ON public.moments FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
--- سياسات تبريكات القاعة
+-- سياسات تبريكات القاعة (خاضعة للـ Rate Limiting والتطهير بالخادم)
 CREATE POLICY "Public read approved wishes" ON public.wishes FOR SELECT USING (is_approved = true);
-CREATE POLICY "Public insert wishes" ON public.wishes FOR INSERT WITH CHECK (true);
 CREATE POLICY "Service role full access wishes" ON public.wishes FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 -- ------------------------------------------------------------------------------

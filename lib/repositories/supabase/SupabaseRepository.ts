@@ -629,7 +629,7 @@ export class SupabaseRepository implements
   async getMoments(eventId: string, onlyApproved: boolean = false): Promise<EventMoment[]> {
     try {
       const supabase = getAdminClient();
-      let query = supabase.from('event_moments').select('*').eq('event_id', eventId);
+      let query = supabase.from('moments').select('*').eq('event_id', eventId);
       if (onlyApproved) query = query.eq('is_approved', true);
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) return [];
@@ -649,7 +649,7 @@ export class SupabaseRepository implements
   ): Promise<EventMoment> {
     const supabase = getAdminClient();
     const { data, error } = await supabase
-      .from('event_moments')
+      .from('moments')
       .insert({
         event_id: eventId,
         uploader_name: uploaderName.trim(),

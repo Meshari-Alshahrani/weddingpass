@@ -90,7 +90,7 @@ export function validateBase64Image(dataUriOrBase64: string): { valid: boolean; 
 
   try {
     const buffer = Buffer.from(base64Data, 'base64');
-    if (buffer.length < 12) {
+    if (buffer.length < 8) {
       return { valid: false, error: 'حجم ملف الصورة صغير جداً وغير صالح' };
     }
 
@@ -103,4 +103,62 @@ export function validateBase64Image(dataUriOrBase64: string): { valid: boolean; 
   } catch {
     return { valid: false, error: 'فشل فك ترميز بيانات الصورة' };
   }
+}
+
+/**
+ * Validates remote image URLs to block SSRF, XSS (SVG scripts), and malicious executable links
+ */
+export function validateImageUrl(urlStr: string): { valid: boolean; error?: string } {
+  if (!urlStr || typeof urlStr !== 'string') {
+    return { valid: false, error: 'رابط الصورة غير صالح' };
+  }
+
+  if (urlStr.length > 2048) {
+    return { valid: false, error: 'رابط الصورة طويل جداً' };
+  }
+
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return { valid: false, error: 'بروتوكول الرابط غير آمن' };
+    }
+
+    const pathname = parsed.pathname.toLowerCase();
+
+    // 1. Block dangerous / executable extensions (including SVG which may contain embedded scripts)
+    const dangerousExtensions = ['.php', '.js', '.mjs', '.ts', '.html', '.htm', '.sh', '.py', '.rb', '.exe', '.bat', '.cmd', '.svg', '.xml'];
+    for (const ext of dangerousExtensions) {
+      if (pathname.endsWith(ext) || pathname.includes(`${ext}?`) || pathname.includes(`${ext}/`)) {
+        return { valid: false, error: `نوع الملف غير مسموح به لأسباب أمنية (${ext})` };
+      }
+    }
+
+    // 2. Allow valid image extensions or trusted storage CDNs
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.heic'];
+    const hasValidExt = allowedExtensions.some((ext) => pathname.endsWith(ext) || pathname.includes(`${ext}?`));
+    const isTrustedHost = parsed.hostname.endsWith('supabase.co') || parsed.hostname.endsWith('unsplash.com') || parsed.hostname.endsWith('cloudinary.com');
+
+    if (!hasValidExt && !isTrustedHost) {
+      return { valid: false, error: 'يجب أن يكون الرابط صورة صالحة (JPEG, PNG, WebP, GIF, AVIF) أو من مزود تخزين سحابي معتمد' };
+    }
+
+    return { valid: true };
+  } catch {
+    return { valid: false, error: 'صيغة رابط الصورة غير صحيحة' };
+  }
+}
+
+/**
+ * Comprehensive Image Payload Validator (Supports both Data URIs and Remote URLs)
+ */
+export function validateImagePayload(mediaUrl: string): { valid: boolean; error?: string } {
+  if (!mediaUrl || typeof mediaUrl !== 'string') {
+    return { valid: false, error: 'يرجى تقديم ملف أو رابط الصورة' };
+  }
+
+  if (mediaUrl.startsWith('data:') || !mediaUrl.startsWith('http')) {
+    return validateBase64Image(mediaUrl);
+  }
+
+  return validateImageUrl(mediaUrl);
 }
