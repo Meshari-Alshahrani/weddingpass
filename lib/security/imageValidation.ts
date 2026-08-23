@@ -83,6 +83,13 @@ export function validateBase64Image(dataUriOrBase64: string): { valid: boolean; 
   }
 
   let base64Data = dataUriOrBase64;
+  if (dataUriOrBase64.startsWith('data:')) {
+    const dataUriHeader = dataUriOrBase64.slice(0, dataUriOrBase64.indexOf(','));
+    if (!/^data:image\/(jpeg|png|webp|gif|avif|heic);base64$/i.test(dataUriHeader)) {
+      return { valid: false, error: 'نوع بيانات الصورة غير مدعوم' };
+    }
+  }
+
   if (dataUriOrBase64.includes(',')) {
     const parts = dataUriOrBase64.split(',');
     base64Data = parts[1] || '';
@@ -90,7 +97,7 @@ export function validateBase64Image(dataUriOrBase64: string): { valid: boolean; 
 
   try {
     const buffer = Buffer.from(base64Data, 'base64');
-    if (buffer.length < 8) {
+    if (buffer.length < 12) {
       return { valid: false, error: 'حجم ملف الصورة صغير جداً وغير صالح' };
     }
 
@@ -119,7 +126,7 @@ export function validateImageUrl(urlStr: string): { valid: boolean; error?: stri
 
   try {
     const parsed = new URL(urlStr);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    if (parsed.protocol !== 'https:') {
       return { valid: false, error: 'بروتوكول الرابط غير آمن' };
     }
 
@@ -133,13 +140,15 @@ export function validateImageUrl(urlStr: string): { valid: boolean; error?: stri
       }
     }
 
-    // 2. Allow valid image extensions or trusted storage CDNs
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.heic'];
-    const hasValidExt = allowedExtensions.some((ext) => pathname.endsWith(ext) || pathname.includes(`${ext}?`));
-    const isTrustedHost = parsed.hostname.endsWith('supabase.co') || parsed.hostname.endsWith('unsplash.com') || parsed.hostname.endsWith('cloudinary.com');
+    // Remote media is rendered in guests' browsers.  Do not permit arbitrary
+    // hosts; a filename extension is not proof that the resource is an image.
+    const trustedDomains = ['supabase.co', 'unsplash.com', 'cloudinary.com'];
+    const isTrustedHost = trustedDomains.some(
+      (domain) => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
+    );
 
-    if (!hasValidExt && !isTrustedHost) {
-      return { valid: false, error: 'يجب أن يكون الرابط صورة صالحة (JPEG, PNG, WebP, GIF, AVIF) أو من مزود تخزين سحابي معتمد' };
+    if (!isTrustedHost) {
+      return { valid: false, error: 'يجب أن يكون رابط الصورة من مزود تخزين معتمد وآمن' };
     }
 
     return { valid: true };

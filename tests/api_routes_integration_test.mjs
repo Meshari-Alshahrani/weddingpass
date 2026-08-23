@@ -10,6 +10,7 @@
  */
 
 import assert from 'node:assert';
+import { readFile } from 'node:fs/promises';
 import { createGateSessionToken, verifyGateSessionToken } from '../lib/security/gateAuth.ts';
 import { validateImagePayload, validateBase64Image, validateImageUrl } from '../lib/security/imageValidation.ts';
 import { checkRateLimit, checkDistributedRateLimit } from '../lib/security/rateLimiter.ts';
@@ -45,7 +46,8 @@ async function test(name, fn) {
 }
 
 // ----------------------------------------------------------------------------
-// Simulated Next.js Route Dispatchers using standard Request & Response Web API
+// Contract dispatchers mirror the HTTP boundary. Source guards below ensure the
+// production route files retain the security controls exercised here.
 // ----------------------------------------------------------------------------
 
 async function handleJoinGet(req) {
@@ -197,8 +199,8 @@ async function handlePublicWishPost(req) {
 }
 
 console.log(`\n${colors.bold}${colors.cyan}=======================================================================`);
-console.log(`   WEDDINGPASS v5.9.2 - PROTOCOL & HTTP ROUTE INTEGRATION TEST SUITE   `);
-console.log(`   (Validating Status Codes, Set-Cookie Headers, Quarantine & Bounds)  `);
+console.log(`   WEDDINGPASS v5.9.3 - ROUTE SECURITY CONTRACT TEST SUITE             `);
+console.log(`   (HTTP contracts plus guards against production-route drift)          `);
 console.log(`=======================================================================${colors.reset}\n`);
 
 // ----------------------------------------------------------------------------
@@ -387,6 +389,40 @@ await test('checkDistributedRateLimit handles burst requests and falls back clea
 
   const res3 = await checkDistributedRateLimit(key, 2, 60000);
   assert.strictEqual(res3.allowed, false, 'Third request blocked by rate limiter');
+});
+
+// -----------------------------------------------------------------------------
+// Test 7: Production Route and Migration Drift Guards
+// -----------------------------------------------------------------------------
+console.log(`\n${colors.bold}--- [7] Production Route & Migration Drift Guards ---${colors.reset}`);
+await test('public join route has no offline-cache export path', async () => {
+  const source = await readFile(new URL('../app/api/join/route.ts', import.meta.url), 'utf8');
+  assert(!source.includes('offlineCache'), 'Public /api/join must never expose offline cache records');
+});
+
+await test('public routes use the distributed limiter and do not import the local-only limiter', async () => {
+  const routes = [
+    '../app/api/checkin/route.ts',
+    '../app/api/rsvp/route.ts',
+    '../app/api/public/wish/route.ts',
+    '../app/api/public/moment/route.ts',
+    '../app/api/admin/route.ts',
+    '../app/api/join/route.ts',
+    '../app/api/gate/auth/route.ts',
+  ];
+
+  for (const route of routes) {
+    const source = await readFile(new URL(route, import.meta.url), 'utf8');
+    assert(source.includes('checkDistributedRateLimit'), `${route} must use distributed rate limiting`);
+    assert(!source.includes("import { checkRateLimit }"), `${route} must not use the local-only limiter`);
+  }
+});
+
+await test('migration 006 guards absent legacy tables before changing policies', async () => {
+  const source = await readFile(new URL('../supabase/migrations/006_remove_public_insert_policies.sql', import.meta.url), 'utf8');
+  assert(source.includes('to_regclass'), 'Migration must guard legacy tables with to_regclass');
+  assert(source.includes('Allow public insert moment'), 'Migration must remove legacy FULL_SETUP policy names');
+  assert(source.includes('Allow public insert wish'), 'Migration must remove legacy FULL_SETUP policy names');
 });
 
 // ----------------------------------------------------------------------------

@@ -19,7 +19,7 @@ import {
   updatePartyTableNumber,
 } from '@/lib/db/store';
 import { getVerifiedAdminSession } from '@/lib/security/adminAuth';
-import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { checkDistributedRateLimit } from '@/lib/security/rateLimiter';
 
 export async function GET(req: NextRequest) {
   try {
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
-    const rateLimit = checkRateLimit(`admin_api_${ip}`, 60, 60000);
+    const rateLimit = await checkDistributedRateLimit(`admin_api_${ip}`, 60, 60000);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { success: false, code: 'RATE_LIMIT_EXCEEDED', message: 'تم تجاوز معدل الطلبات المسموح' },

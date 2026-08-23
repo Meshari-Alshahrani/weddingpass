@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDefaultEvent } from '@/lib/db/store';
 import { constantTimeCompare } from '@/lib/crypto/tokens';
-import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { checkDistributedRateLimit } from '@/lib/security/rateLimiter';
 import { createGateSessionToken, GateSessionPayload, GateRole } from '@/lib/security/gateAuth';
 
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
-    const rateLimit = checkRateLimit(`gate_auth_${ip}`, 10, 60000); // 10 attempts per min
+    const rateLimit = await checkDistributedRateLimit(`gate_auth_${ip}`, 10, 60000); // 10 attempts per min
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { success: false, code: 'RATE_LIMIT_EXCEEDED', message: 'تم تجاوز عدد محاولات إدخال الرمز. يرجى الانتظار دقيقة.' },

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeCheckIn, searchParties, getDefaultEvent } from '@/lib/db/store';
-import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { checkDistributedRateLimit } from '@/lib/security/rateLimiter';
 import { getVerifiedGateSession } from '@/lib/security/gateAuth';
 
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
-    const rateLimit = checkRateLimit(`checkin_${ip}`, 120, 60000); // 120 requests/minute per IP
+    const rateLimit = await checkDistributedRateLimit(`checkin_${ip}`, 120, 60000); // 120 requests/minute per IP
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { success: false, code: 'RATE_LIMIT_EXCEEDED', message: 'تم تجاوز الحد المسموح للطلبات. يرجى الانتظار قليلاً.' },

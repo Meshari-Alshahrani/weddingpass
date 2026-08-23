@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDefaultEvent, addMoment } from '@/lib/db/store';
-import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { checkDistributedRateLimit } from '@/lib/security/rateLimiter';
 import { validateImagePayload } from '@/lib/security/imageValidation';
 
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
-    const rateLimit = checkRateLimit(`public_moment_${ip}`, 10, 60000);
+    const rateLimit = await checkDistributedRateLimit(`public_moment_${ip}`, 10, 60000);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { success: false, message: 'تم تجاوز الحد المسموح لرفع الصور. يرجى الانتظار قليلاً.' },

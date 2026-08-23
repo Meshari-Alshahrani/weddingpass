@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { submitPartyRSVP, getPartyByInvitationToken } from '@/lib/db/store';
-import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { checkDistributedRateLimit } from '@/lib/security/rateLimiter';
 
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
-    const rateLimit = checkRateLimit(`rsvp_${ip}`, 30, 60000); // 30 RSVPs per minute per IP
+    const rateLimit = await checkDistributedRateLimit(`rsvp_${ip}`, 30, 60000); // 30 RSVPs per minute per IP
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { success: false, message: 'تم تجاوز عدد المحاولات المسموح بها مؤقتاً. يرجى المحاولة بعد دقيقة.' },
