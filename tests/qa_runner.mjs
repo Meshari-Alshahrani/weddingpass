@@ -23,6 +23,7 @@ import {
   deleteMoment,
   updatePartyTableNumber,
 } from '../lib/db/store.ts';
+import { validateImageMagicBytes } from '../lib/security/imageValidation.ts';
 
 // ----------------------------------------------------------------------------
 // Pure helper functions under direct test
@@ -36,7 +37,7 @@ function sanitizeExcelCell(val) {
 }
 
 function sanitizeHtml(str) {
-  if (!str) return '';
+  if (typeof str !== 'string') return '';
   return str.replace(/[&<>"']/g, (m) => ({
     '&': '&amp;',
     '<': '&lt;',
@@ -44,17 +45,6 @@ function sanitizeHtml(str) {
     '"': '&quot;',
     "'": '&#039;',
   }[m] || m));
-}
-
-function validateImageMagicBytes(buffer) {
-  if (!buffer || buffer.length < 4) return false;
-  // WebP: RIFF (52 49 46 46)
-  const isWebP = buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46;
-  // JPEG: FF D8 FF
-  const isJPEG = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-  // PNG: 89 50 4E 47
-  const isPNG = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
-  return isWebP || isJPEG || isPNG;
 }
 
 // ----------------------------------------------------------------------------

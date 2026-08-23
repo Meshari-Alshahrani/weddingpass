@@ -85,7 +85,6 @@ export interface ICheckInRepository {
     partyId: string;
     partyName: string;
     passTokenHash: string;
-    rawPassToken?: string;
     confirmedCount: number;
     section: string;
     tableNumber: string | null;

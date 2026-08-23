@@ -76,14 +76,12 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
   const wakeLockRef = useRef<any>(null);
   const undoTimerRef = useRef<any>(null);
 
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [undoToast, setUndoToast] = useState<{ partyName: string; tableNumber?: string | null; admittedCount?: number } | null>(null);
 
-  // 1. PIN Auth Check via Verified Server Session
+  // 1. Gate Auth State Check
   useEffect(() => {
-    const savedToken = sessionStorage.getItem(`weddingpass_gate_session_${initialEvent.id}`);
-    if (savedToken) {
-      setSessionToken(savedToken);
+    const isAuthed = sessionStorage.getItem(`weddingpass_gate_auth_${initialEvent.id}`);
+    if (isAuthed === 'true') {
       setIsAuthenticated(true);
     }
   }, [initialEvent.id]);
@@ -107,6 +105,7 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
 
       const res = await fetch('/api/gate/auth', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pin: pinInput.trim(),
@@ -116,9 +115,8 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
         }),
       });
       const data = await res.json();
-      if (data.success && data.sessionToken) {
-        sessionStorage.setItem(`weddingpass_gate_session_${initialEvent.id}`, data.sessionToken);
-        setSessionToken(data.sessionToken);
+      if (data.success) {
+        sessionStorage.setItem(`weddingpass_gate_auth_${initialEvent.id}`, 'true');
         setIsAuthenticated(true);
       } else {
         alert(data.message || 'رمز الدخول غير صحيح');
@@ -258,7 +256,6 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
     try {
       const res = await fetch('/api/gate/cache', {
         credentials: 'include',
-        headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
       });
       const data = await res.json();
       if (data.success && data.records) {
@@ -355,7 +352,6 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
           },
           body: JSON.stringify({
             token: trimmed,
@@ -367,8 +363,7 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
 
         if (res.status === 401) {
           setIsAuthenticated(false);
-          setSessionToken(null);
-          sessionStorage.removeItem(`weddingpass_gate_session_${initialEvent.id}`);
+          sessionStorage.removeItem(`weddingpass_gate_auth_${initialEvent.id}`);
           alert('انتهت جلسة البوابة المشفرة أو أنها غير مصرحة. يرجى إعادة إدخال رمز الـ PIN.');
           setLoading(false);
           return;

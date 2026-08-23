@@ -83,7 +83,6 @@ export async function POST(req: NextRequest) {
       success: true,
       code: 'AUTHENTICATED',
       message: determinedRole === 'supervisor' ? 'تم تسجيل الدخول بصلاحية المشرف العام 🛡️' : 'تم التحقق وتفعيل جلسة البوابة 🌹',
-      sessionToken,
       stationId: sessionPayload.stationId,
       stationName: sessionPayload.stationName,
       operatorId: sessionPayload.operatorId,

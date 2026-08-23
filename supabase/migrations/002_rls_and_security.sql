@@ -73,28 +73,20 @@ CREATE POLICY "Service role full access group_links" ON public.group_links
     USING (auth.role() = 'service_role')
     WITH CHECK (auth.role() = 'service_role');
 
--- 6. Moments Gallery Policies
+-- 6. Moments Gallery Policies (Strict Server-Mediated Insertion)
 CREATE POLICY "Public read approved moments" ON public.moments 
     FOR SELECT 
     USING (is_approved = true);
-
-CREATE POLICY "Public insert moments" ON public.moments 
-    FOR INSERT 
-    WITH CHECK (true);
 
 CREATE POLICY "Service role full access moments" ON public.moments 
     FOR ALL 
     USING (auth.role() = 'service_role')
     WITH CHECK (auth.role() = 'service_role');
 
--- 7. Wishes Guestbook Policies
+-- 7. Wishes Guestbook Policies (Strict Server-Mediated Insertion)
 CREATE POLICY "Public read approved wishes" ON public.wishes 
     FOR SELECT 
     USING (is_approved = true);
-
-CREATE POLICY "Public insert wishes" ON public.wishes 
-    FOR INSERT 
-    WITH CHECK (true);
 
 CREATE POLICY "Service role full access wishes" ON public.wishes 
     FOR ALL 

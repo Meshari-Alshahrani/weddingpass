@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "test": "node tests/qa_runner.mjs && node tests/concurrency_test.mjs && node tests/http_concurrency_test.mjs",
+    "test": "node tests/qa_runner.mjs && node tests/concurrency_test.mjs && node tests/http_concurrency_test.mjs && node tests/api_routes_integration_test.mjs",
     "test:concurrency": "node tests/concurrency_test.mjs",
-    "test:http": "node tests/http_concurrency_test.mjs"
+    "test:http": "node tests/http_concurrency_test.mjs",
+    "test:api": "node tests/api_routes_integration_test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

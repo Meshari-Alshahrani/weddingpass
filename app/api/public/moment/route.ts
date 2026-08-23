@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDefaultEvent, addMoment } from '@/lib/db/store';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { validateBase64Image } from '@/lib/security/imageValidation';
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,12 +24,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Enforce payload bounds
+    // Enforce payload bounds (max 5 MB)
     if (mediaUrl.length > 5 * 1024 * 1024) {
       return NextResponse.json(
         { success: false, message: 'حجم الصورة كبير جداً (الحد الأقصى 5 ميجابايت)' },
         { status: 413 }
       );
+    }
+
+    // Mandatory Binary Magic Bytes Verification for Data URIs & Base64 uploads
+    if (mediaUrl.startsWith('data:') || !mediaUrl.startsWith('http')) {
+      const magicCheck = validateBase64Image(mediaUrl);
+      if (!magicCheck.valid) {
+        return NextResponse.json(
+          { success: false, message: magicCheck.error || 'الملف المرفوع ليس صورة صالحة' },
+          { status: 400 }
+        );
+      }
     }
 
     const cleanName = (typeof uploaderName === 'string' ? uploaderName : 'ضيف كريم')

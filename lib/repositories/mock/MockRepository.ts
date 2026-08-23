@@ -766,7 +766,6 @@ export class MockRepository implements
           partyId: party.id,
           partyName: party.party_name,
           passTokenHash: pass.pass_token_hash,
-          rawPassToken: pass.raw_pass_token,
           confirmedCount: party.confirmed_count || party.allowed_count,
           section: party.section,
           tableNumber: party.table_number || null,

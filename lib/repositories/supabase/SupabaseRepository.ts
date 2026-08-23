@@ -519,7 +519,6 @@ export class SupabaseRepository implements
     partyId: string;
     partyName: string;
     passTokenHash: string;
-    rawPassToken?: string;
     confirmedCount: number;
     section: string;
     tableNumber: string | null;

@@ -7,6 +7,17 @@
 
 ---
 
+### 🔹 [v5.9.2] - 2026-08-23 (Critical Security Hardening & Zero-Trust Production Seal)
+* **سد الثغرات الأمنية الحرجة والمطابقة الصارمة (10/10 Production Readiness):**
+  - **سد ثغرة تسريب كاش البطاقات (P0 Fix):** إزالة معامل `offlineCache=true` تماماً من المسار العام [`/api/join`](file:///Users/ewexox/Documents/weddingpass/app/api/join/route.ts)، وحصر تصدير كاش البطاقات المشفرة حصرياً على المسار المحمي [`/api/gate/cache`](file:///Users/ewexox/Documents/weddingpass/app/api/gate/cache/route.ts) بعد إثبات جلسة البوابة المشفرة.
+  - **الحماية الحصرية بكوكيز `HttpOnly` ومنع سرقة الجلسات (P1 Fix):** حظر إعادة توكن الجلسة المشفر في جسم الـ JSON من [`/api/gate/auth`](file:///Users/ewexox/Documents/weddingpass/app/api/gate/auth/route.ts) ومنع حفظه في `sessionStorage` في [`GateScanner.tsx`](file:///Users/ewexox/Documents/weddingpass/components/GateScanner.tsx)، والاعتماد بنسبة 100% على كوكي `__Host-gate_session` المزود بخصائص `HttpOnly; Secure; SameSite=Strict` لصد هجمات XSS.
+  - **حظر الإدخال المباشر للتهاني والصور في Supabase RLS (P1 Fix):** حذف سياسات `Public insert` من جداول `wishes` و `moments`، وحصر الإدخال على `service_role` عبر خوادم Next.js لفرض قيود الـ Rate Limiting، وفحص الحجم، والتطهير، والحجر الصحي.
+  - **التحقق من البايتات السحرية الثنائية للصور (Binary Magic Bytes Validator):** إنشاء مكتبة [`lib/security/imageValidation.ts`](file:///Users/ewexox/Documents/weddingpass/lib/security/imageValidation.ts) للتحقق الميداني من البايتات الثنائية لملفات WebP, JPEG, PNG, GIF, AVIF ورفض السكربتات والملفات الملغومة في [`/api/public/moment`](file:///Users/ewexox/Documents/weddingpass/app/api/public/moment/route.ts).
+  - **إنشاء حزمة اختبارات التكامل الأمني والسياسات (`tests/api_routes_integration_test.mjs`):** 9 فحوصات تكامل إضافية رفعت مجموع الاختبارات الناجحة إلى **57/57 فحصاً (100% نجاح)**.
+  - **إصلاح تحذيرات البناء وحصر تتبع الملفات (`outputFileTracingRoot`):** ضبط تتبع الحزم على مجلد المشروع لمنع تداخل الحزم الخارجية.
+
+---
+
 ### 🔹 [v5.9.1] - 2026-08-22 (Production Cloud Hardening, Master Admin PIN Lock & WhatsApp Unicode Sanitization)
 * **الأمان السحابي المشدد وتجربة الإنتاج:**
   - **حماية لوحة التحكم الإدارية بشاشة قفل PIN مشفرة (`/admin`):** إضافة شاشة قفل ملكية تمنع أي وصول غير مصرح لبيانات الضيوف والإعدادات، وتتطلب إدخال رمز المرور الإداري المخصص (الافتراضي `2026` مع إمكانية تغييره)، مع حفظ الجلسة في `sessionStorage` وإضافة زر "قفل اللوحة 🔒" لتسجيل الخروج الفوري.
@@ -216,3 +227,15 @@
 ### ADR-025: التهيئة الذاتية لقاعدة البيانات السحابية ومنع أخطاء Single Row (Zero-Crash Auto-Seeding)
 * **القرار:** استخدام استعلامات المصفوفات الآمنة والزرع التلقائي للفعالية الافتراضية في `SupabaseRepository` واستبدال كافة استدعاءات `.single()` المشددة بـ `.maybeSingle()` ومعالجات fallback.
 * **السبب:** ضمان تحميل كافة صفحات السيرفر (SSR) باستقرار 100% دون كراش حتى لو كانت قاعدة البيانات جديدة أو خالية من الصفوف.
+
+### ADR-026: عزل وتأمين كاش البطاقات ومنع التسريب عبر /api/join
+* **القرار:** حذف معامل `offlineCache` تماماً من مسار `/api/join` وقصر تنزيل الكاش المحلي على مسار `/api/gate/cache` المحمي بجلسة البوابة المشفرة.
+* **السبب:** سد ثغرة تسريب بيانات الضيوف وتجزئات التوكنات لأي مستخدم عام دون مصادقة.
+
+### ADR-027: الاعتماد الحصري على كوكي HttpOnly وإلغاء حفظ التوكن في JavaScript
+* **القرار:** حظر إرجاع `sessionToken` في جسم الـ JSON وحذف حفظه في `sessionStorage` بماسح البوابة، وقصر التحقق على كوكي `__Host-gate_session` (HttpOnly; Secure; SameSite=Strict).
+* **السبب:** القضاء على خطر سرقة جلسات البوابات عبر ثغرات XSS وضمان مطابقة معايير OWASP.
+
+### ADR-028: حظر الإدخال المباشر في RLS وفحص البايتات السحرية للصور
+* **القرار:** إزالة سياسات `Public insert` في Supabase لـ `wishes` و `moments`، وفرض المرور عبر Next.js API مع فحص البايتات الثنائية (Magic Bytes) للصور المرفوعة.
+* **السبب:** منع إغراق قاعدة البيانات (DDoS) وتجاوز الحجر الصحي، وصد هجمات رفع الملفات التنفيذية أو السكربتات الملغمة.

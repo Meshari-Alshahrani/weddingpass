@@ -3,7 +3,6 @@ import {
   getGroupLinkBySlug,
   registerGroupGuest,
   recoverGuestPassByPhone,
-  getActivePassesForOfflineCache,
   getDefaultEvent,
 } from '@/lib/db/store';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
@@ -13,14 +12,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const slug = searchParams.get('slug');
     const recoverPhone = searchParams.get('recoverPhone');
-    const offlineCache = searchParams.get('offlineCache');
-
-    // Offline cache request for gate scanner
-    if (offlineCache === 'true') {
-      const event = await getDefaultEvent();
-      const passes = await getActivePassesForOfflineCache(event.id);
-      return NextResponse.json({ success: true, passes });
-    }
 
     // Phone recovery request
     if (recoverPhone) {
