@@ -1,5 +1,5 @@
 # 🏛️ المعمارية التقنية وهندسة النظم (System Architecture)
-### منظومة WeddingPass v5.9.3 (Enterprise Production Architecture)
+### منظومة WeddingPass v5.9.4 (Production Architecture)
 
 ---
 
@@ -20,7 +20,7 @@ graph TD
         E3[🛑 Zero-Cache Dynamic Enforcer & No-Store]
     end
 
-    subgraph AppRouter[طبقة تطبيق Next.js App Router - 18 مساراً]
+    subgraph AppRouter[طبقة تطبيق Next.js App Router]
         R1[/i/token: معالج الدعوات الفردية]
         R2[/join/slug: معالج قروبات الواتساب والتسجيل]
         R3[/checkin: محطة البوابات الذكية]

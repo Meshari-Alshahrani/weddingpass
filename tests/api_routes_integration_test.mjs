@@ -199,7 +199,7 @@ async function handlePublicWishPost(req) {
 }
 
 console.log(`\n${colors.bold}${colors.cyan}=======================================================================`);
-console.log(`   WEDDINGPASS v5.9.3 - ROUTE SECURITY CONTRACT TEST SUITE             `);
+console.log(`   WEDDINGPASS v5.9.4 - ROUTE SECURITY CONTRACT TEST SUITE             `);
 console.log(`   (HTTP contracts plus guards against production-route drift)          `);
 console.log(`=======================================================================${colors.reset}\n`);
 

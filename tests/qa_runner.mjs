@@ -75,7 +75,7 @@ function assert(condition, testName, details) {
 
 async function runLiveCodeQASuite() {
   console.log(`\n${colors.bold}${colors.cyan}=======================================================================`);
-  console.log(`   WEDDINGPASS v5.6 - LIVE SOURCE CODE REGRESSION & SECURITY SUITE    `);
+  console.log(`   WEDDINGPASS v5.9.4 - LIVE SOURCE CODE REGRESSION & SECURITY SUITE  `);
   console.log(`   (Importing Directly from lib/crypto, lib/security, lib/db, lib/utils)`);
   console.log(`=======================================================================${colors.reset}\n`);
 

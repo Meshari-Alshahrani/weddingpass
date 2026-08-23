@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, supabaseAdmin } from '@/lib/db/supabase';
 import { getDefaultEvent, getEventStats, getCheckInLogs } from '@/lib/db/store';
 import { getVerifiedAdminSession } from '@/lib/security/adminAuth';
+import { APP_VERSION } from '@/lib/appVersion';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,16 +31,23 @@ export async function GET(req: NextRequest) {
   let dbLatencyMs = 0;
 
   try {
+    if (!isSupabaseConfigured || !supabaseAdmin) {
+      throw new Error('Supabase server credentials are not configured');
+    }
+
+    const { error: connectionError } = await supabaseAdmin.from('events').select('id').limit(1);
+    if (connectionError) throw connectionError;
+
     const event = await getDefaultEvent();
     dbLatencyMs = Date.now() - startDb;
     eventStats = await getEventStats(event.id);
     const logs = await getCheckInLogs(event.id);
     recentLogsCount = logs.length;
 
-    checks.database_driver = isSupabaseConfigured ? 'supabase_postgresql_direct' : 'in_memory_mock';
+    checks.database_driver = 'supabase_postgresql_direct';
     checks.db_latency_ms = dbLatencyMs;
     checks.event_loaded = event.id ? 'ok' : 'error';
-    checks.atomic_checkin_rpc = isSupabaseConfigured ? 'available_in_database' : 'mocked_in_memory';
+    checks.atomic_checkin_rpc = 'configured_for_service_role';
   } catch (err: any) {
     checks.database_error = err.message;
   }
@@ -48,7 +56,7 @@ export async function GET(req: NextRequest) {
     success: true,
     status: checks.event_loaded === 'ok' ? 'operational' : 'degraded',
     timestamp,
-    version: '5.8.0',
+    version: APP_VERSION,
     adminId: adminSession.adminId,
     adminRole: adminSession.role,
     diagnostics: checks,

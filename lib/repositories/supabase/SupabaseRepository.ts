@@ -51,6 +51,16 @@ function getAdminClient() {
   return supabaseAdmin;
 }
 
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+function throwInProduction(message: string, cause?: unknown): void {
+  if (!isProduction()) return;
+  const detail = cause instanceof Error ? `: ${cause.message}` : '';
+  throw new Error(`${message}${detail}`);
+}
+
 export class SupabaseRepository implements
   IEventRepository,
   IPartyRepository,
@@ -70,7 +80,12 @@ export class SupabaseRepository implements
       if (!error && data && data.length > 0) {
         return data[0] as WeddingEvent;
       }
-      // If table is empty or fresh, seed default record into Supabase automatically
+      if (isProduction()) {
+        throw new Error('Database Error: no event is configured. Apply migrations and create an event before serving traffic.');
+      }
+
+      // Local development convenience only; production data is seeded by an
+      // explicit migration or deployment process.
       const { data: seeded } = await supabase
         .from('events')
         .upsert(FALLBACK_EVENT)
@@ -78,9 +93,10 @@ export class SupabaseRepository implements
         .maybeSingle();
 
       if (seeded) return seeded as WeddingEvent;
-      return FALLBACK_EVENT;
+      throw new Error('Database Error: failed to seed local fallback event.');
     } catch (e) {
-      console.warn('getDefaultEvent safe fallback:', e);
+      throwInProduction('Database Error: failed to load the default event', e);
+      console.warn('getDefaultEvent development fallback:', e);
       return FALLBACK_EVENT;
     }
   }
@@ -96,6 +112,9 @@ export class SupabaseRepository implements
         .maybeSingle();
 
       if (error || !data) {
+        if (isProduction()) {
+          throw new Error(`Database Error: updateEventSettings failed: ${error?.message || 'event not found'}`);
+        }
         // Fallback update in case of missing row
         const { data: upserted } = await supabase
           .from('events')
@@ -106,6 +125,7 @@ export class SupabaseRepository implements
       }
       return data as WeddingEvent;
     } catch (err: any) {
+      throwInProduction('Database Error: updateEventSettings failed', err);
       console.warn('updateEventSettings warning:', err.message);
       return { ...FALLBACK_EVENT, ...eventData } as WeddingEvent;
     }
@@ -194,11 +214,13 @@ export class SupabaseRepository implements
         .order('created_at', { ascending: false });
 
       if (error) {
+        throwInProduction('Database Error: getAllParties failed', error);
         console.warn('getAllParties query warning:', error.message);
         return [];
       }
       return (data || []) as Party[];
     } catch (err) {
+      throwInProduction('Database Error: getAllParties failed', err);
       console.warn('getAllParties exception:', err);
       return [];
     }
@@ -273,6 +295,7 @@ export class SupabaseRepository implements
   async updatePartyTableNumber(partyId: string, tableNumber?: string | null): Promise<boolean> {
     const supabase = getAdminClient();
     const { error } = await supabase.from('parties').update({ table_number: tableNumber ? tableNumber.trim() : null, updated_at: new Date().toISOString() }).eq('id', partyId);
+    if (error) throw new Error(`Database Error: updatePartyTableNumber failed: ${error.message}`);
     return !error;
   }
 
@@ -321,7 +344,8 @@ export class SupabaseRepository implements
     try {
       const supabase = getAdminClient();
       const { data, error } = await supabase.from('group_links').select('*').eq('event_id', eventId).order('created_at', { ascending: false });
-      if (error || !data || data.length === 0) {
+      if (error) {
+        throwInProduction('Database Error: getAllGroupLinks failed', error);
         return [
           {
             id: 'g0000000-0000-0000-0000-000000000001',
@@ -339,8 +363,9 @@ export class SupabaseRepository implements
           },
         ];
       }
-      return data as GroupInviteLink[];
-    } catch {
+      return (data || []) as GroupInviteLink[];
+    } catch (err) {
+      throwInProduction('Database Error: getAllGroupLinks failed', err);
       return [
         {
           id: 'g0000000-0000-0000-0000-000000000001',
@@ -508,9 +533,13 @@ export class SupabaseRepository implements
         .eq('event_id', eventId)
         .order('created_at', { ascending: false });
 
-      if (error) return [];
+      if (error) {
+        throwInProduction('Database Error: getCheckInLogs failed', error);
+        return [];
+      }
       return (data || []) as CheckInLog[];
-    } catch {
+    } catch (err) {
+      throwInProduction('Database Error: getCheckInLogs failed', err);
       return [];
     }
   }
@@ -561,6 +590,7 @@ export class SupabaseRepository implements
       .from('entry_passes')
       .update({ status: 'revoked', revoked_at: new Date().toISOString() })
       .eq('party_id', partyId);
+    if (error) throw new Error(`Database Error: revokePass failed: ${error.message}`);
     return !error;
   }
 
@@ -582,7 +612,7 @@ export class SupabaseRepository implements
       .select()
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) throw new Error(`Database Error: regeneratePass failed: ${error?.message || 'pass not found'}`);
     return { ...data, raw_pass_token: rawPassToken } as EntryPass;
   }
 
@@ -595,9 +625,13 @@ export class SupabaseRepository implements
       let query = supabase.from('wishes').select('*').eq('event_id', eventId);
       if (onlyApproved) query = query.eq('is_approved', true);
       const { data, error } = await query.order('created_at', { ascending: false });
-      if (error) return [];
+      if (error) {
+        throwInProduction('Database Error: getWishes failed', error);
+        return [];
+      }
       return (data || []) as Wish[];
-    } catch {
+    } catch (err) {
+      throwInProduction('Database Error: getWishes failed', err);
       return [];
     }
   }
@@ -623,6 +657,7 @@ export class SupabaseRepository implements
   async toggleWishApproval(wishId: string, isApproved: boolean): Promise<boolean> {
     const supabase = getAdminClient();
     const { error } = await supabase.from('wishes').update({ is_approved: isApproved }).eq('id', wishId);
+    if (error) throw new Error(`Database Error: toggleWishApproval failed: ${error.message}`);
     return !error;
   }
 
@@ -632,9 +667,13 @@ export class SupabaseRepository implements
       let query = supabase.from('moments').select('*').eq('event_id', eventId);
       if (onlyApproved) query = query.eq('is_approved', true);
       const { data, error } = await query.order('created_at', { ascending: false });
-      if (error) return [];
+      if (error) {
+        throwInProduction('Database Error: getMoments failed', error);
+        return [];
+      }
       return (data || []) as EventMoment[];
-    } catch {
+    } catch (err) {
+      throwInProduction('Database Error: getMoments failed', err);
       return [];
     }
   }
@@ -669,12 +708,14 @@ export class SupabaseRepository implements
   async toggleMomentApproval(momentId: string, isApproved: boolean): Promise<boolean> {
     const supabase = getAdminClient();
     const { error } = await supabase.from('moments').update({ is_approved: isApproved }).eq('id', momentId);
+    if (error) throw new Error(`Database Error: toggleMomentApproval failed: ${error.message}`);
     return !error;
   }
 
   async deleteMoment(momentId: string): Promise<boolean> {
     const supabase = getAdminClient();
     const { error } = await supabase.from('moments').delete().eq('id', momentId);
+    if (error) throw new Error(`Database Error: deleteMoment failed: ${error.message}`);
     return !error;
   }
 

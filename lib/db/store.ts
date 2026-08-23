@@ -1,7 +1,9 @@
 /**
  * WeddingPass Central Data Store Facade
  * Version: 5.8 (Enterprise Repository Architecture)
- * Delegates to the active repository (Supabase PostgreSQL in production with Fail-Closed, or Mock in tests)
+ * Compatibility facade that delegates every operation to the active repository.
+ * Production is Supabase-only and fail-closed; MockRepository is limited to
+ * tests or explicit local development opt-in.
  */
 import { getRepository } from '../repositories/index.ts';
 import type {

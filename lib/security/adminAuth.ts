@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { constantTimeCompare } from '../crypto/tokens.ts';
-import { isSupabaseConfigured, supabase } from '../db/supabase.ts';
+import { isSupabaseConfigured, supabaseAdmin } from '../db/supabase.ts';
 
 export interface AdminSessionPayload {
   adminId: string;
@@ -84,9 +84,9 @@ export async function getVerifiedAdminSession(req: NextRequest, targetEventOwner
     if (customVerified) return customVerified;
 
     // Check Supabase Auth JWT if configured
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabaseAdmin) {
       try {
-        const { data, error } = await supabase.auth.getUser(token);
+        const { data, error } = await supabaseAdmin.auth.getUser(token);
         if (!error && data?.user) {
           const user = data.user;
           const userRole = user.app_metadata?.role || user.user_metadata?.role;

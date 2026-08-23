@@ -1,15 +1,17 @@
 {
   "name": "weddingpass",
-  "version": "0.1.0",
+  "version": "5.9.4",
   "type": "module",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "test": "node tests/qa_runner.mjs && node tests/concurrency_test.mjs && node tests/http_concurrency_test.mjs && node tests/api_routes_integration_test.mjs",
+    "test": "NODE_ENV=test node tests/qa_runner.mjs && NODE_ENV=test node tests/concurrency_test.mjs && NODE_ENV=test node tests/http_concurrency_test.mjs && NODE_ENV=test node tests/api_routes_integration_test.mjs && NODE_ENV=test node tests/production_configuration_test.mjs",
     "test:concurrency": "node tests/concurrency_test.mjs",
     "test:http": "node tests/http_concurrency_test.mjs",
-    "test:api": "node tests/api_routes_integration_test.mjs"
+    "test:api": "NODE_ENV=test node tests/api_routes_integration_test.mjs",
+    "test:production-config": "NODE_ENV=test node tests/production_configuration_test.mjs",
+    "test:supabase": "RUN_SUPABASE_INTEGRATION=true NODE_ENV=production node tests/supabase_integration_test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

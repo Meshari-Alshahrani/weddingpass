@@ -11,7 +11,7 @@ const colors = {
 
 async function runHttpConcurrencyVerification() {
   console.log(`\n${colors.bold}${colors.cyan}=======================================================================`);
-  console.log(`   WEDDINGPASS v5.7 - PROTOCOL & HTTP CONCURRENCY VERIFICATION         `);
+  console.log(`   WEDDINGPASS v5.9.4 - PROTOCOL & HTTP CONCURRENCY VERIFICATION       `);
   console.log(`   (Testing Session Verification, Fail-Closed, and Race Resilience)    `);
   console.log(`=======================================================================${colors.reset}\n`);
 

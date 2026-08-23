@@ -17,7 +17,7 @@ const rateLimitMap = new Map<string, RateLimitRecord>();
 
 // Periodic memory-bounded cleanup
 if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
+  const cleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [key, record] of rateLimitMap.entries()) {
       record.timestamps = record.timestamps.filter((ts) => now - ts < 60000);
@@ -26,6 +26,10 @@ if (typeof setInterval !== 'undefined') {
       }
     }
   }, 60000);
+
+  // In Node-based tests and one-off scripts, this housekeeping timer must not
+  // keep the process alive after all work is complete.
+  (cleanupTimer as ReturnType<typeof setInterval> & { unref?: () => void }).unref?.();
 }
 
 /**
@@ -85,9 +89,22 @@ export async function checkDistributedRateLimit(
 ): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
   const kvUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
   const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+  const mode = process.env.RATE_LIMITER_MODE || (process.env.NODE_ENV === 'production' ? 'distributed' : 'local');
+
+  if (mode !== 'local' && mode !== 'distributed') {
+    throw new Error('RATE_LIMITER_MODE must be either "local" or "distributed".');
+  }
+
+  if (mode === 'local') {
+    return checkRateLimit(identifier, maxRequests, windowMs);
+  }
 
   if (!kvUrl || !kvToken) {
-    // Fall back to local sliding window
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Distributed rate limiting is required in production. Configure Upstash/Vercel KV or set RATE_LIMITER_MODE=local explicitly.');
+    }
+
+    // Local development fallback only.
     return checkRateLimit(identifier, maxRequests, windowMs);
   }
 

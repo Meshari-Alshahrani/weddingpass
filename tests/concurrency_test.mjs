@@ -11,7 +11,7 @@ const colors = {
 
 async function runConcurrencyChaosSuite() {
   console.log(`\n${colors.bold}${colors.cyan}=======================================================================`);
-  console.log(`   WEDDINGPASS v5.6 - HIGH-CONCURRENCY ATOMIC RACE CONDITION SUITE     `);
+  console.log(`   WEDDINGPASS v5.9.4 - HIGH-CONCURRENCY ATOMIC RACE CONDITION SUITE  `);
   console.log(`   (Simulating 100 Parallel Burst Requests against Single Entry Pass)  `);
   console.log(`=======================================================================${colors.reset}\n`);
 
