@@ -3,6 +3,7 @@ import { GroupInviteView } from '@/components/GroupInviteView';
 import { notFound } from 'next/navigation';
 import { AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { toPublicEvent, toPublicGroupInvite } from '@/lib/presentation/publicDtos';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -41,5 +42,5 @@ export default async function GroupJoinPage({ params }: PageProps) {
     );
   }
 
-  return <GroupInviteView group={data.group} event={data.event} />;
+  return <GroupInviteView group={toPublicGroupInvite(data.group)} event={toPublicEvent(data.event)} />;
 }

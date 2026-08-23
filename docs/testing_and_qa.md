@@ -13,6 +13,7 @@
 4. **حزمة اختبارات عقود المسارات والسياسات (`tests/api_routes_integration_test.mjs`):** 12 فحص تكامل تختبر أكواد الاستجابة (400, 401, 200, 429)، وترويسات الكوكيز المشددة، وتطهير XSS، وفحص Magic Bytes، وحراس عدم الانجراف (Drift Guards).
 5. **حارس إعدادات الإنتاج (`tests/production_configuration_test.mjs`):** يتحقق أن الإنتاج يرفض غياب Supabase، وأن ملف البيئة يوثق الأسرار المطلوبة، وأن الـfacade لا يعود لتخزين محلي.
 6. **فحص Supabase الحقيقي (`tests/supabase_integration_test.mjs`):** اختبار اختياري غير معدّل للبيانات، يشغّل فقط مع `RUN_SUPABASE_INTEGRATION=true` وأسرار مشروع Supabase.
+7. **حارس حدود البيانات العامة (`tests/public_data_boundary_test.mjs`):** يمنع تمرير سجلات قاعدة البيانات الخام إلى Client Components أو APIs العامة، ويمنع ظهور PIN البوابة والمالك وأرقام الجوال وهاشات الدعوات/البطاقات في DTOs العامة.
 
 ---
 

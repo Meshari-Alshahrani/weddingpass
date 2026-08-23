@@ -6,6 +6,12 @@ import {
   getDefaultEvent,
 } from '@/lib/db/store';
 import { checkDistributedRateLimit } from '@/lib/security/rateLimiter';
+import {
+  toPublicEntryPass,
+  toPublicEvent,
+  toPublicGroupInvite,
+  toPublicInvitationParty,
+} from '@/lib/presentation/publicDtos';
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,7 +32,12 @@ export async function GET(req: NextRequest) {
 
       const event = await getDefaultEvent();
       const result = await recoverGuestPassByPhone(event.id, recoverPhone);
-      return NextResponse.json(result);
+      return NextResponse.json({
+        success: result.success,
+        message: result.message,
+        party: result.party ? toPublicInvitationParty(result.party) : undefined,
+        entryPass: toPublicEntryPass(result.entryPass),
+      });
     }
 
     // Group info request by slug
@@ -41,8 +52,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      group: data.group,
-      event: data.event,
+      group: toPublicGroupInvite(data.group),
+      event: toPublicEvent(data.event),
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
@@ -78,7 +89,14 @@ export async function POST(req: NextRequest) {
       notes
     );
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: result.success,
+      code: result.code,
+      message: result.message,
+      party: result.party ? toPublicInvitationParty(result.party) : undefined,
+      entryPass: toPublicEntryPass(result.entryPass),
+      remainingSeats: result.remainingSeats,
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   }

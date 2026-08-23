@@ -3,6 +3,7 @@ import { LuxuryInvitation } from '@/components/LuxuryInvitation';
 import { notFound } from 'next/navigation';
 import { AlertCircle, Search } from 'lucide-react';
 import Link from 'next/link';
+import { toPublicEntryPass, toPublicEvent, toPublicInvitationParty } from '@/lib/presentation/publicDtos';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -46,9 +47,9 @@ export default async function InvitationPage({ params }: PageProps) {
 
   return (
     <LuxuryInvitation
-      party={data.party}
-      event={data.event}
-      initialEntryPass={data.entryPass}
+      party={toPublicInvitationParty(data.party)}
+      event={toPublicEvent(data.event)}
+      initialEntryPass={toPublicEntryPass(data.entryPass)}
       invitationToken={token}
     />
   );

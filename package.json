@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "test": "NODE_ENV=test node tests/qa_runner.mjs && NODE_ENV=test node tests/concurrency_test.mjs && NODE_ENV=test node tests/http_concurrency_test.mjs && NODE_ENV=test node tests/api_routes_integration_test.mjs && NODE_ENV=test node tests/production_configuration_test.mjs",
+    "test": "NODE_ENV=test node tests/qa_runner.mjs && NODE_ENV=test node tests/concurrency_test.mjs && NODE_ENV=test node tests/http_concurrency_test.mjs && NODE_ENV=test node tests/api_routes_integration_test.mjs && NODE_ENV=test node tests/production_configuration_test.mjs && NODE_ENV=test node tests/public_data_boundary_test.mjs",
     "test:concurrency": "node tests/concurrency_test.mjs",
     "test:http": "node tests/http_concurrency_test.mjs",
     "test:api": "NODE_ENV=test node tests/api_routes_integration_test.mjs",

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { GroupInviteLink, WeddingEvent, Party, EntryPass } from '@/types/database';
+import type { PublicEntryPass, PublicEvent, PublicGroupInvite, PublicInvitationParty } from '@/lib/presentation/publicDtos';
 import { EntryPassCard } from './EntryPassCard';
 import confetti from 'canvas-confetti';
 import {
@@ -28,8 +28,8 @@ import {
 import Link from 'next/link';
 
 interface GroupInviteViewProps {
-  group: GroupInviteLink;
-  event: WeddingEvent;
+  group: PublicGroupInvite;
+  event: PublicEvent;
 }
 
 export function GroupInviteView({ group, event }: GroupInviteViewProps) {
@@ -42,8 +42,8 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Result state
-  const [confirmedParty, setConfirmedParty] = useState<Party | null>(null);
-  const [entryPass, setEntryPass] = useState<EntryPass | null>(null);
+  const [confirmedParty, setConfirmedParty] = useState<PublicInvitationParty | null>(null);
+  const [entryPass, setEntryPass] = useState<PublicEntryPass | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   // Phone recovery state

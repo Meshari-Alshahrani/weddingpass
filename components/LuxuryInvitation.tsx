@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Party, WeddingEvent, EntryPass } from '@/types/database';
+import type { PublicEntryPass, PublicEvent, PublicInvitationParty } from '@/lib/presentation/publicDtos';
 import { EntryPassCard } from './EntryPassCard';
 import confetti from 'canvas-confetti';
 import {
@@ -28,9 +28,9 @@ import {
 import Link from 'next/link';
 
 interface LuxuryInvitationProps {
-  party: Party;
-  event: WeddingEvent;
-  initialEntryPass?: EntryPass;
+  party: PublicInvitationParty;
+  event: PublicEvent;
+  initialEntryPass?: PublicEntryPass;
   invitationToken: string;
 }
 
@@ -50,7 +50,7 @@ export function LuxuryInvitation({
   );
   const [wishText, setWishText] = useState<string>(party.notes || '');
   const [needsWheelchair, setNeedsWheelchair] = useState<boolean>(Boolean(party.needs_wheelchair));
-  const [entryPass, setEntryPass] = useState<EntryPass | undefined>(initialEntryPass);
+  const [entryPass, setEntryPass] = useState<PublicEntryPass | undefined>(initialEntryPass);
   const [loading, setLoading] = useState(false);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
 

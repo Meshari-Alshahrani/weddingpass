@@ -2,11 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import {
-  CheckInRPCResponse,
-  CheckInType,
-  WeddingEvent,
-} from '@/types/database';
+import { CheckInRPCResponse, CheckInType } from '@/types/database';
+import type { PublicGateEvent } from '@/lib/presentation/publicDtos';
 import {
   ShieldCheck,
   AlertTriangle,
@@ -25,7 +22,7 @@ import {
 } from 'lucide-react';
 
 interface GateScannerProps {
-  initialEvent: WeddingEvent;
+  initialEvent: PublicGateEvent;
 }
 
 interface OfflinePassRecord {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { submitPartyRSVP, getPartyByInvitationToken } from '@/lib/db/store';
 import { checkDistributedRateLimit } from '@/lib/security/rateLimiter';
+import { toPublicEntryPass } from '@/lib/presentation/publicDtos';
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,8 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: result.success,
       message: result.message,
-      entryPass: result.entryPass,
-      party: partyData.party,
+      entryPass: toPublicEntryPass(result.entryPass),
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error.message || 'حدث خطأ في الخادم' }, { status: 500 });

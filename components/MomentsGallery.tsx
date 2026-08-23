@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { EventMoment, WeddingEvent } from '@/types/database';
+import type { PublicEvent, PublicMoment } from '@/lib/presentation/publicDtos';
 import {
   Camera,
   Upload,
@@ -16,12 +16,12 @@ import {
 import Link from 'next/link';
 
 interface MomentsGalleryProps {
-  initialEvent: WeddingEvent;
-  initialMoments: EventMoment[];
+  initialEvent: PublicEvent;
+  initialMoments: PublicMoment[];
 }
 
 export function MomentsGallery({ initialEvent, initialMoments }: MomentsGalleryProps) {
-  const [moments, setMoments] = useState<EventMoment[]>(initialMoments);
+  const [moments, setMoments] = useState<PublicMoment[]>(initialMoments);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploaderName, setUploaderName] = useState('');
   const [uploaderPhone, setUploaderPhone] = useState('');

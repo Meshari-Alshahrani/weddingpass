@@ -1,6 +1,7 @@
 import { getDefaultEvent } from '@/lib/db/store';
 import { GateScanner } from '@/components/GateScanner';
 import { WeddingEvent } from '@/types/database';
+import { toPublicGateEvent } from '@/lib/presentation/publicDtos';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -28,13 +29,8 @@ const FALLBACK_EVENT: WeddingEvent = {
 export default async function CheckInPage() {
   try {
     const event = (await getDefaultEvent()) || FALLBACK_EVENT;
-    const safeEvent = {
-      ...event,
-      gate_pin: undefined, // Strip secret PIN from client bundle
-    };
-
-    return <GateScanner initialEvent={safeEvent} />;
+    return <GateScanner initialEvent={toPublicGateEvent(event)} />;
   } catch {
-    return <GateScanner initialEvent={{ ...FALLBACK_EVENT, gate_pin: undefined }} />;
+    return <GateScanner initialEvent={toPublicGateEvent(FALLBACK_EVENT)} />;
   }
 }
