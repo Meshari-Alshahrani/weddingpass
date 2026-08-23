@@ -119,18 +119,21 @@ if (mounted && !isAdminAuthenticated) {
 1. **حزمة اختبارات الوحدة والجودة (`tests/qa_runner.mjs`):** 40/40 فحصاً ناجحاً بنسبة 100%.
 2. **حزمة اختبارات التزامن والسباق (`tests/concurrency_test.mjs`):** 5/5 اختبارات سباق ناجحة تحت ضغط 100 طلب متزامن.
 3. **حزمة اختبارات البروتوكول والـ HTTP (`tests/http_concurrency_test.mjs`):** 3/3 اختبارات سلامة بروتوكول ناجحة.
-4. **حزمة اختبارات التكامل الأمني والسياسات (`tests/api_routes_integration_test.mjs`):** 9/9 اختبارات تكامل وسياسات أمان ناجحة.
+4. **حزمة اختبارات عقود المسارات والسياسات (`tests/api_routes_integration_test.mjs`):** 12/12 اختبار تكامل، أمان كوكيز، وحراس عدم الانجراف (Drift Guards).
 5. **الفاحص السحابي المباشر للإنتاج (`scratch/cloud_live_tester.mjs`):** فحص كافة سيناريوهات الخادم السحابي الحي على Vercel و Supabase.
 6. **البناء السحابي للإنتاج (`npm run build`):** اجتياز كامل لكافة المسارات الـ 18 بدون أي أخطاء أو تحذيرات (Clean Build).
-7. **إجمالي الاختبارات المؤتمتة:** **57/57 فحصاً ناجحاً بنسبة 100%**.
+7. **إجمالي الاختبارات المؤتمتة:** **60/60 فحصاً ناجحاً بنسبة 100%**.
 
 ---
 
-## 🔐 4. إضافات الأمان والتحصين السحابي (v5.9.2 Production Security Seal)
+## 🔐 4. إضافات الأمان والتحصين المؤسساتي (v5.9.3 Enterprise Security Seal)
 
-* **سد ثغرة تسريب كاش البطاقات (Zero Cache Leak):** حذف معامل `offlineCache` من `/api/join` وقصر الوصول على `/api/gate/cache` المصرح.
+* **ملف تهجير محصن (Resilient Migration 006):** استخدام `to_regclass()` وحلقات الفحص المرنة لحذف السياسات القديمة بأمان تام على أي قاعدة بيانات قائمة دون توقف.
+* **إلغاء الملفات المتضاربة واعتماد Migrations حصرياً:** إيقاف `FULL_SETUP.sql` واعتماد `supabase/migrations/` (001 إلى 006) مصدراً وحيداً للمخطط.
+* **الـ Rate Limiter الموزع (Edge Multi-Instance Rate Limiting):** ربط كافة المسارات بـ `checkDistributedRateLimit` مع دعم Upstash Redis / Vercel KV REST وتقييد الذاكرة المحلية (Max 10k Keys).
+* **سد ثغرة تسريب كاش البطاقات (Zero Cache Leak):** حذف معامل `offlineCache` من `/api/join` وقصر الوصول على `/api/gate/cache` المصرح بجلسة بوابة.
 * **الحماية الصارمة بكوكيز HttpOnly (No JS Exfiltration):** حظر إعادة توكن الجلسة في JSON وحذف حفظه في `sessionStorage` بماسح البوابة.
 * **إغلاق الإدخال العام في Supabase RLS (Server-Mediated Only):** حذف `WITH CHECK (true)` العام من `wishes` و `moments` وإلزام المرور عبر خوادم Next.js لتطبيق الـ Rate Limit والحجر الصحي.
-* **فحص البايتات السحرية للصور (Binary Magic Bytes):** التحقق الميداني من ترويسات الملفات الثنائية لصد هجمات الملفات الملغمة في `/api/public/moment`.
+* **الفحص الإلزامي الشامل للصور (URLs & Binary Magic Bytes):** فحص ترويسات البايتات الثنائية للـ Base64 وحظر الروابط غير الآمنة والسكربتات في `/api/public/moment`.
 * **شاشة القفل الإداري (Admin PIN Gatekeeper):** حجب واجهة `/admin` بطلب رمز PIN المشفر قبل عرض أي تفاصيل للضيوف أو الإعدادات.
 * **الزرع الذاتي الآمن (Zero-Crash Auto-Seeding):** استبدال استعلامات `.single()` المشددة بـ `.maybeSingle()` والاستعلامات الآمنة لمنع تعطل السيرفر.
