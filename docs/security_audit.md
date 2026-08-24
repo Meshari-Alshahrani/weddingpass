@@ -104,13 +104,16 @@ if (isOverrideRequested && session.role !== 'supervisor') {
 }
 ```
 
-### 6. حماية لوحة التحكم الإدارية بشاشة قفل مشفرة (`components/AdminDashboard.tsx`)
+### 6. حماية لوحة التحكم الإدارية بجلسة موقعة على الخادم (`app/api/admin/auth/route.ts`) — v6.0.0
 ```typescript
-// Master Admin PIN Lock Screen with Session Isolation
-if (mounted && !isAdminAuthenticated) {
-  return <AdminLockScreen onSubmit={handleAdminPinSubmit} />;
+// Real authorization: DAL guard runs BEFORE any data access, and every
+// /api/admin handler re-verifies session + event binding independently.
+const session = await requireAdminSession(); // redirects to /admin/login if absent
+if (adminSession.eventId && adminSession.eventId !== event.id) {
+  return NextResponse.json({ success: false, code: 'FORBIDDEN_EVENT' }, { status: 403 });
 }
 ```
+> ملاحظة تاريخية: قبل v6.0.0 كان «قفل PIN» في AdminDashboard قفل عميل فقط (sessionStorage) وكانت بيانات الضيوف تصل RSC payload لأي زائر، مع باكدور `'2026'`. أُلغي ذلك كلياً (ADR-029/032).
 
 ---
 
@@ -130,7 +133,18 @@ if (mounted && !isAdminAuthenticated) {
 
 ---
 
-## 🔐 4. إضافات الأمان والتحصين المؤسساتي (v5.9.4 Production Security)
+## 🔐 4. إضافات الأمان والتحصين المؤسساتي (v6.0.0 Security & Integrity)
+
+* **مصادقة الإدارة على الخادم (ADR-029/032):** ‏DAL قبل أي استعلام + تحقق مستقل في كل handler + مطابقة eventId من الجلسة؛ ‏`ADMIN_PIN` مستقل إلزامي مع guard ضد تطابق الأسرار الثلاثة، وإسقاط الباكدور `'2026'` والاعتماد العميلي كلياً.
+* **الأوفلاين Provisional (ADR-030):** مطابقة هاش محلية صحيحة، ‏LOCAL_ADMISSION موسوم، طابور بـqueueId idempotency يعيد النتيجة الأصلية من `check_in_logs.metadata` (فهرس فريد حاجز سباق)، وحذف فقط عند حكم نهائي.
+* **سلامة التسجيل (migration 007 / ADR-031):** رفض التكرار دون تدوير (منع DoS بإبطال QR ضيف)، ‏UNIQUE جزئي + CHECKs بنمط ABORT-أولاً بتقرير تشخيصي، ‏clamp مقاعد داخل الـRPC، وتهريب LIKE داخل `search_parties` المعاملاتية بدل `.or()` النصي.
+* **حدود الاعتماد (ADR-034):** ‏`GuestEntryPassCredential` بقناتين موثقتين فقط؛ حظر QR fallback قابل للتخمين؛ DTO للّحظات العامة بلا هواتف.
+* **Hardened CSP (ADR-033):** nonce+strict-dynamic عبر proxy مع CSP_MODE ثلاثي، وخطوط next/font مستضافة ذاتياً (لا أصول خارجية يوم الحفل).
+* **تشفير بلا تدهور صامت:** رمي أخطاء عند غياب Web Crypto بدل fallbacks ضعيفة؛ تسمية صادقة للمقارنة ثابتة العمل بالمتصفح.
+
+---
+
+## 🛡️ 4bis. التحصينات الميدانية السابقة (v5.9.4 Production Security)
 
 * **ملف تهجير محصن (Resilient Migration 006):** استخدام `to_regclass()` لحذف سياسات الإدخال العام المعروفة بأمان عندما تكون جداولها موجودة. قواعد البيانات التي أُنشئت بمخطط قديم مختلف تتطلب ترحيل بيانات مُراجعًا.
 * **إلغاء الملفات المتضاربة واعتماد Migrations حصرياً:** إيقاف `FULL_SETUP.sql` واعتماد `supabase/migrations/` (001 إلى 006) مصدراً وحيداً للمخطط.

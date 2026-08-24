@@ -53,7 +53,7 @@ npm run dev
 
 ## 🗄️ المرجع المعتمد لقاعدة بيانات Supabase
 
-* ملفات المجلد [`supabase/migrations/`](../supabase/migrations/) هي **المصدر الوحيد المعتمد والنهائي** لمخطط Supabase، وتُطبّق بالترتيب من `001` إلى `006` عبر Supabase CLI أو في تبويب SQL Editor.
+* ملفات المجلد [`supabase/migrations/`](../supabase/migrations/) هي **المصدر الوحيد المعتمد والنهائي** لمخطط Supabase، وتُطبّق بالترتيب من `001` إلى `007` عبر Supabase CLI أو في تبويب SQL Editor.
 * ملف `supabase/FULL_SETUP.sql` متقاعد عمدًا (`DEPRECATED`) ولا يجوز استخدامه بعد اليوم لتجنب أي تضارب مع المخطط المعتمد.
-* ملف الهجرة الأخير [`006_remove_public_insert_policies.sql`](../supabase/migrations/006_remove_public_insert_policies.sql) يستخدم فحوصات `to_regclass` لإزالة سياسات الإدخال العام المعروفة بأمان عندما تكون جداولها موجودة. قواعد البيانات التي أنشئت بمخطط قديم مختلف تحتاج مراجعة/ترحيل بيانات قبل الاعتماد عليها.
+* ملف الهجرة الأخير [`007_registration_integrity.sql`](../supabase/migrations/007_registration_integrity.sql) يضيف سلامة التسجيل والـidempotency وقيود الفهرسة — **يفشل عمداً بتقرير تشخيصي** إن وُجدت بيانات مكررة أو أرقام غير مطبعة تتطلب قراراً بشرياً قبل إعادة التطبيق.
 * بعد تطبيق الترحيلات وضبط أسرار الإنتاج، شغّل `npm run test:supabase` مرة واحدة. الاختبار غير مُعدِّل للبيانات: يتحقق من الاتصال الفعلي وصلاحية RPC عبر service role، ولا يدخل ضمن `npm test` المحلي.

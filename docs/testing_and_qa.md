@@ -7,13 +7,15 @@
 
 لضمان أعلى معايير الجودة والأمان ومقاومة الضغط في ليالي الأعراس الحية، تعتمد المنظومة **النموذج الرباعي الشامل (Quad-Engine QA Architecture)**:
 
-1. **مشغل الاختبارات الموحد للوحدات والأمان (`tests/qa_runner.mjs`):** 40 فحصاً حياً يستورد الدوال مباشرة من طبقة التشفير والأمان والمنطق وقاعدة البيانات.
+1. **مشغل الاختبارات الموحد للوحدات والأمان (`tests/qa_runner.mjs`):** 60 فحصاً حياً يستورد الدوال مباشرة من طبقة التشفير والأمان والمنطق وقاعدة البيانات — يشمل توازي هاش العميل (`sha256Hex`) مع هاش الخادم، وتهريب/طي ICS بالبايتات.
 2. **محرك اختبارات السباق التزامني (`tests/concurrency_test.mjs`):** 5 فحوصات سباق تحاكي 100 طلب متزامن لاختبار القفل السحابي وموثوقية الكوتا.
 3. **محرك اختبارات البروتوكول والـ HTTP (`tests/http_concurrency_test.mjs`):** 3 فحوصات بروتوكول تختبر صحة توقيع HMAC، كوكيز `__Host-`، وعزل التحضير.
 4. **حزمة اختبارات عقود المسارات والسياسات (`tests/api_routes_integration_test.mjs`):** 12 فحص تكامل تختبر أكواد الاستجابة (400, 401, 200, 429)، وترويسات الكوكيز المشددة، وتطهير XSS، وفحص Magic Bytes، وحراس عدم الانجراف (Drift Guards).
-5. **حارس إعدادات الإنتاج (`tests/production_configuration_test.mjs`):** يتحقق أن الإنتاج يرفض غياب Supabase، وأن ملف البيئة يوثق الأسرار المطلوبة، وأن الـfacade لا يعود لتخزين محلي.
+5. **حارس إعدادات الإنتاج (`tests/production_configuration_test.mjs`):** يتحقق أن الإنتاج يرفض غياب Supabase، وأن `.env.example` يوثق كل الأسرار (incl. `ADMIN_PIN`, `CSP_MODE`)، وأن فصل أسرار الإدارة مُطبق ولا أثر لباكدور `'2026'`.
 6. **فحص Supabase الحقيقي (`tests/supabase_integration_test.mjs`):** اختبار اختياري غير معدّل للبيانات، يشغّل فقط مع `RUN_SUPABASE_INTEGRATION=true` وأسرار مشروع Supabase.
-7. **حارس حدود البيانات العامة (`tests/public_data_boundary_test.mjs`):** يمنع تمرير سجلات قاعدة البيانات الخام إلى Client Components أو APIs العامة، ويمنع ظهور PIN البوابة والمالك وأرقام الجوال وهاشات الدعوات/البطاقات في DTOs العامة.
+7. **حارس حدود البيانات العامة (`tests/public_data_boundary_test.mjs`):** يمنع تمرير سجلات قاعدة البيانات الخام إلى Client Components أو APIs العامة، ويفرض ترتيب «DAL قبل الاستعلام» في صفحات الإدارة، وانضباط قناتي `raw_pass_token`، ومنع أي QR fallback قابل للتخمين.
+8. **حارس سلامة قاعدة البيانات (`tests/database_integrity_test.mjs`):** يحلل ترحيلات SQL ثابتاً: idempotency الـqueueId داخل الـRPC، DROP التوقيع القديم قبل الجديد، قفل EXECUTE لـservice_role، فهارس event-scoped، قيود UNIQUE/CHECK بنمط ABORT-أولاً، ودالة البحث INVOKER المعاملة.
+9. **E2E المتصفح (`npm run test:e2e` / Playwright):** ‏smoke على 5 مسارات يراقب CSP violations/hydration/console errors + دورة QR الكاملة: تسجيل → إصدار credential → دخول SUCCESS → إعادة مسح ALREADY_CHECKED_IN (staging/محلي فقط).
 
 ---
 
@@ -54,9 +56,10 @@ npm test
 ```
 
 ### ملخص نتائج الفحص الشامل
-* **مشغل الاختبارات الحية (`qa_runner.mjs`):** 40/40 فحصاً ناجحاً (100%).
+* **مشغل الاختبارات الحية (`qa_runner.mjs`):** 60/60 فحصاً ناجحاً (100%).
 * **محرك اختبارات التزامن والسباق (`concurrency_test.mjs`):** 5/5 فحوصات ناجحة (100%).
 * **محرك اختبارات البروتوكول (`http_concurrency_test.mjs`):** 3/3 فحوصات ناجحة (100%).
 * **حزمة اختبارات عقود المسارات (`api_routes_integration_test.mjs`):** 12/12 فحصاً ناجحاً (100%).
-* **حارس إعدادات الإنتاج (`production_configuration_test.mjs`):** ناجح ضمن `npm test`.
+* **حراس الإنتاج والحدود والسلامة:** `production_configuration` + `public_data_boundary` + `database_integrity` — ناجحة ضمن `npm test`.
 * **اختبار Supabase الحقيقي:** لا يُحتسب ضمن الاختبارات المحلية؛ شغّله يدويًا عبر `npm run test:supabase` بعد تطبيق migrations وضبط الأسرار.
+* **E2E المتصفح (`npm run test:e2e`):** 6/6 ناجحة (smoke ×5 + دورة QR) — يتطلب `npx playwright install chromium` مرة واحدة.

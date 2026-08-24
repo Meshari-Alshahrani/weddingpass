@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDefaultEvent } from '@/lib/db/store';
+import { escapeIcsText, foldIcsLine } from '@/lib/utils/sanitize';
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,6 +21,8 @@ export async function GET(req: NextRequest) {
     // End time 4 hours later
     const endStr = `${cleanDate}T235900`;
 
+    // RFC 5545 §3.3.11: every TEXT value is escaped; every content line is
+    // folded at 75 octets (byte-accurate for Arabic/emoji).
     const icsContent = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
@@ -40,27 +43,28 @@ export async function GET(req: NextRequest) {
       `DTSTAMP:${cleanDate}T000000Z`,
       `DTSTART;TZID=Asia/Riyadh:${startStr}`,
       `DTEND;TZID=Asia/Riyadh:${endStr}`,
-      `SUMMARY:${title}`,
-      `DESCRIPTION:${description}`,
-      `LOCATION:${location}`,
-      event.venue_maps_url ? `URL:${event.venue_maps_url}` : '',
+      `SUMMARY:${escapeIcsText(title)}`,
+      `DESCRIPTION:${escapeIcsText(description)}`,
+      `LOCATION:${escapeIcsText(location)}`,
+      event.venue_maps_url ? `URL:${escapeIcsText(event.venue_maps_url)}` : '',
       'STATUS:CONFIRMED',
       // Alarm 1: 24 Hours prior
       'BEGIN:VALARM',
       'TRIGGER:-P1D',
       'ACTION:DISPLAY',
-      `DESCRIPTION:تذكير: حفل زفاف ${event.groom_name} و ${event.bride_name} غداً`,
+      `DESCRIPTION:${escapeIcsText(`تذكير: حفل زفاف ${event.groom_name} و ${event.bride_name} غداً`)}`,
       'END:VALARM',
       // Alarm 2: 2 Hours prior
       'BEGIN:VALARM',
       'TRIGGER:-PT2H',
       'ACTION:DISPLAY',
-      `DESCRIPTION:تذكير: حفل زفاف ${event.groom_name} و ${event.bride_name} بعد ساعتين`,
+      `DESCRIPTION:${escapeIcsText(`تذكير: حفل زفاف ${event.groom_name} و ${event.bride_name} بعد ساعتين`)}`,
       'END:VALARM',
       'END:VEVENT',
       'END:VCALENDAR',
     ]
       .filter(Boolean)
+      .map(foldIcsLine)
       .join('\r\n');
 
     return new NextResponse(icsContent, {

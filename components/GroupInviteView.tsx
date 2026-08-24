@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import type { PublicEntryPass, PublicEvent, PublicGroupInvite, PublicInvitationParty } from '@/lib/presentation/publicDtos';
+import type { GuestEntryPassCredential, PublicEvent, PublicGroupInvite, PublicInvitationParty } from '@/lib/presentation/publicDtos';
 import { EntryPassCard } from './EntryPassCard';
 import confetti from 'canvas-confetti';
 import {
@@ -43,7 +43,7 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
 
   // Result state
   const [confirmedParty, setConfirmedParty] = useState<PublicInvitationParty | null>(null);
-  const [entryPass, setEntryPass] = useState<PublicEntryPass | null>(null);
+  const [entryPass, setEntryPass] = useState<GuestEntryPassCredential | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   // Phone recovery state
@@ -381,7 +381,7 @@ export function GroupInviteView({ group, event }: GroupInviteViewProps) {
               partyName={confirmedParty.party_name}
               confirmedCount={confirmedParty.confirmed_count}
               section={confirmedParty.section}
-              passToken={entryPass.raw_pass_token || `wp_pass_${confirmedParty.id}`}
+              passToken={entryPass.raw_pass_token || ''}
               eventGroom={event.groom_name}
               eventBride={event.bride_name}
               eventDate={event.event_date}

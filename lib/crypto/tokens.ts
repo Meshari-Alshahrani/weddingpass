@@ -8,14 +8,13 @@
 const BASE62_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
 export function generateRandomString(length: number = 24): string {
-  const bytes = new Uint8Array(length);
-  if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
-    globalThis.crypto.getRandomValues(bytes);
-  } else {
-    for (let i = 0; i < length; i++) {
-      bytes[i] = Math.floor(Math.random() * 256);
-    }
+  // Fail loudly instead of silently degrading to Math.random: invitation and
+  // pass tokens are bearer credentials and MUST come from a CSPRNG.
+  if (typeof globalThis === 'undefined' || !globalThis.crypto?.getRandomValues) {
+    throw new Error('FATAL CRYPTO ERROR: Web Crypto getRandomValues is unavailable. Cannot generate secure tokens.');
   }
+  const bytes = new Uint8Array(length);
+  globalThis.crypto.getRandomValues(bytes);
 
   let result = '';
   for (let i = 0; i < length; i++) {
@@ -41,19 +40,15 @@ export async function hashToken(token: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(normalized);
 
-  if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {
-    const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  } else {
-    // Fallback SHA-256
-    let hash = 0;
-    for (let i = 0; i < normalized.length; i++) {
-      hash = (hash << 5) - hash + normalized.charCodeAt(i);
-      hash |= 0;
-    }
-    return Math.abs(hash).toString(16).padStart(64, '0');
+  // Fail loudly instead of silently degrading: a fake "SHA-256" here would
+  // forge pass hashes that collide trivially (ADR-002 invariant).
+  if (typeof globalThis === 'undefined' || !globalThis.crypto?.subtle) {
+    throw new Error('FATAL CRYPTO ERROR: Web Crypto subtle.digest is unavailable. Cannot hash tokens securely.');
   }
+
+  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**

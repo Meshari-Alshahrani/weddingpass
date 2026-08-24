@@ -1,65 +1,51 @@
 import { getDefaultEvent, getEventStats, getCheckInLogs, getWishes } from '@/lib/db/store';
 import { LiveMonitor } from '@/components/LiveMonitor';
-import { WeddingEvent } from '@/types/database';
+import { requireAdminSession } from '@/lib/security/adminDal';
+import { FALLBACK_EVENT, isProductionRuntime } from '@/lib/config/fallbackEvent';
 
 export const dynamic = 'force-dynamic';
 
-const FALLBACK_EVENT: WeddingEvent = {
-  id: 'a0000000-0000-0000-0000-000000000001',
-  slug: 'royal-wedding-2026',
-  groom_name: 'سلمان بن فهد العتيبي',
-  bride_name: 'نورية بنت عبدالله آل سعود',
-  event_date: '2026-10-24',
-  event_time: '20:00:00',
-  venue_name: 'قاعة فندق الريتز كارلتون - الرياض',
-  venue_address: 'طريق مكة المكرمة، الهدا، الرياض',
-  venue_maps_url: 'https://maps.google.com/?q=Ritz+Carlton+Riyadh',
-  welcome_verse: 'وَمِنْ آيَاتِهِ أَنْ خَلَقَ لَكُم مِّنْ أَنفُسِكُمْ أَزْوَاجًا لِّتَسْكُنُوا إِلَيْهَا وَجَعَلَ بَيْنَكُم مَّوَدَّةً وَرَحْمَةً',
-  theme_id: 'classic_gold',
-  rsvp_mode: 'count',
-  gate_pin: '2026',
-  timeline_reception: '08:00 م',
-  timeline_ardah: '09:30 م',
-  timeline_dinner: '10:30 م',
-  created_at: new Date().toISOString(),
+const EMPTY_STATS = {
+  totalInvited: 0,
+  expectedGuests: 0,
+  checkedInGuests: 0,
+  confirmedParties: 0,
+  declinedParties: 0,
+  pendingParties: 0,
 };
 
+function UnconfiguredScreen() {
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+      <div className="max-w-md w-full bg-slate-900 border border-amber-500/30 rounded-3xl p-8 text-center space-y-3">
+        <h1 className="text-lg font-bold gold-gradient-text">شاشة القاعة غير مهيأة بعد</h1>
+        <p className="text-xs text-slate-400 leading-relaxed">تعذر تحميل بيانات الفعالية من قاعدة البيانات.</p>
+      </div>
+    </div>
+  );
+}
+
 export default async function LiveMonitorPage() {
+  await requireAdminSession();
+
   try {
-    const event = (await getDefaultEvent()) || FALLBACK_EVENT;
+    const event = await getDefaultEvent();
     const [stats, logs, wishes] = await Promise.all([
-      getEventStats(event.id).catch(() => ({
-        totalInvited: 0,
-        expectedGuests: 0,
-        checkedInGuests: 0,
-        confirmedParties: 0,
-        declinedParties: 0,
-        pendingParties: 0,
-      })),
+      getEventStats(event.id).catch(() => EMPTY_STATS),
       getCheckInLogs(event.id).catch(() => []),
       getWishes(event.id, true).catch(() => []),
     ]);
 
-    return (
-      <LiveMonitor
-        initialEvent={event}
-        initialStats={stats}
-        initialLogs={logs}
-        initialWishes={wishes}
-      />
-    );
-  } catch {
+    return <LiveMonitor initialEvent={event} initialStats={stats} initialLogs={logs} initialWishes={wishes} />;
+  } catch (err) {
+    console.error('LiveMonitorPage Render Error:', err);
+    if (isProductionRuntime()) {
+      return <UnconfiguredScreen />;
+    }
     return (
       <LiveMonitor
         initialEvent={FALLBACK_EVENT}
-        initialStats={{
-          totalInvited: 0,
-          expectedGuests: 0,
-          checkedInGuests: 0,
-          confirmedParties: 0,
-          declinedParties: 0,
-          pendingParties: 0,
-        }}
+        initialStats={EMPTY_STATS}
         initialLogs={[]}
         initialWishes={[]}
       />

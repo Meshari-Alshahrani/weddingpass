@@ -23,26 +23,7 @@ import type {
 import { supabaseAdmin, isSupabaseConfigured } from '../../db/supabase.ts';
 import { generateInvitationToken, generateEntryPassToken, hashToken } from '../../crypto/tokens.ts';
 import { normalizeSaudiPhone } from '../../utils/phone.ts';
-
-const FALLBACK_EVENT: WeddingEvent = {
-  id: 'a0000000-0000-0000-0000-000000000001',
-  slug: 'royal-wedding-2026',
-  groom_name: 'سلمان بن فهد العتيبي',
-  bride_name: 'نورية بنت عبدالله آل سعود',
-  event_date: '2026-10-24',
-  event_time: '20:00:00',
-  venue_name: 'قاعة فندق الريتز كارلتون - الرياض',
-  venue_address: 'طريق مكة المكرمة، الهدا، الرياض',
-  venue_maps_url: 'https://maps.google.com/?q=Ritz+Carlton+Riyadh',
-  welcome_verse: 'وَمِنْ آيَاتِهِ أَنْ خَلَقَ لَكُم مِّنْ أَنفُسِكُمْ أَزْوَاجًا لِّتَسْكُنُوا إِلَيْهَا وَجَعَلَ بَيْنَكُم مَّوَدَّةً وَرَحْمَةً',
-  theme_id: 'classic_gold',
-  rsvp_mode: 'count',
-  gate_pin: '2026',
-  timeline_reception: '08:00 م',
-  timeline_ardah: '09:30 م',
-  timeline_dinner: '10:30 م',
-  created_at: new Date().toISOString(),
-};
+import { FALLBACK_EVENT, isProductionRuntime } from '../../config/fallbackEvent.ts';
 
 function getAdminClient() {
   if (!isSupabaseConfigured || !supabaseAdmin) {
@@ -52,7 +33,7 @@ function getAdminClient() {
 }
 
 function isProduction(): boolean {
-  return process.env.NODE_ENV === 'production';
+  return isProductionRuntime();
 }
 
 function throwInProduction(message: string, cause?: unknown): void {
@@ -326,15 +307,17 @@ export class SupabaseRepository implements
 
   async searchParties(eventId: string, query: string): Promise<Party[]> {
     const supabase = getAdminClient();
-    const { data, error } = await supabase
-      .from('parties')
-      .select('*')
-      .eq('event_id', eventId)
-      .or(`party_name.ilike.%${query}%,primary_phone.ilike.%${query}%`)
-      .limit(20);
 
-    if (error) throw new Error(`Database Error: searchParties failed: ${error.message}`);
-    return (data || []) as Party[];
+    // Parameterized RPC (migration 007): user input never enters PostgREST
+    // filter grammar. LIKE escaping, length capping, and phone-format
+    // normalization live inside the SQL function.
+    const { data, error } = await supabase.rpc('search_parties', {
+      p_event_id: eventId,
+      p_query: query,
+    });
+
+    if (error) throw new Error(`Database Error: search_parties failed: ${error.message}`);
+    return (data || []) as unknown as Party[];
   }
 
   // --------------------------------------------------------------------------
@@ -458,6 +441,27 @@ export class SupabaseRepository implements
     });
 
     if (error) throw new Error(`Database Error: register_group_guest_atomic failed: ${error.message}`);
+
+    // Duplicate registration: the RPC deliberately does NOT rotate or revoke
+    // the existing pass (phone numbers are not authentication — rotating here
+    // would enable a QR-invalidation DoS against legitimate guests).
+    // Recovery is via the original invitation link or manual admin reissue.
+    if (data?.success && data?.code === 'ALREADY_REGISTERED') {
+      let existingParty: Party | undefined;
+      if (data.existing_party_id) {
+        const { data: existingRow } = await supabase.from('parties').select('*').eq('id', data.existing_party_id).maybeSingle();
+        if (existingRow) existingParty = existingRow as Party;
+      }
+      return {
+        success: true,
+        code: 'ALREADY_REGISTERED',
+        message: data.message || 'تم تسجيل هذا الرقم مسبقاً في هذه المجموعة',
+        party: existingParty,
+        entryPass: undefined,
+        remainingSeats: data.remaining,
+      };
+    }
+
     if (!data.success) {
       return {
         success: false,
@@ -500,7 +504,8 @@ export class SupabaseRepository implements
     checkinType: 'QR_SCAN' | 'MANUAL_SEARCH' = 'QR_SCAN',
     overrideCount?: number,
     gateSection: 'men' | 'women' | 'general' = 'men',
-    forceAdmitCrossSection: boolean = false
+    forceAdmitCrossSection: boolean = false,
+    reconciliation?: { queueId?: string | null; deviceMetadata?: Record<string, any> | null }
   ): Promise<CheckInRPCResponse> {
     const supabase = getAdminClient();
     const trimmed = rawPassToken.trim();
@@ -515,6 +520,9 @@ export class SupabaseRepository implements
       p_override_count: overrideCount || null,
       p_gate_section: gateSection,
       p_force_cross_section: forceAdmitCrossSection,
+      // Offline reconciliation idempotency (ADR-030)
+      p_queue_id: reconciliation?.queueId || null,
+      p_device_metadata: reconciliation?.deviceMetadata || null,
     });
 
     if (error) {

@@ -7,7 +7,7 @@ import {
 } from '@/lib/db/store';
 import { checkDistributedRateLimit } from '@/lib/security/rateLimiter';
 import {
-  toPublicEntryPass,
+  toGuestEntryPassCredential,
   toPublicEvent,
   toPublicGroupInvite,
   toPublicInvitationParty,
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         success: result.success,
         message: result.message,
         party: result.party ? toPublicInvitationParty(result.party) : undefined,
-        entryPass: toPublicEntryPass(result.entryPass),
+        entryPass: toGuestEntryPassCredential(result.entryPass),
       });
     }
 
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       code: result.code,
       message: result.message,
       party: result.party ? toPublicInvitationParty(result.party) : undefined,
-      entryPass: toPublicEntryPass(result.entryPass),
+      entryPass: toGuestEntryPassCredential(result.entryPass),
       remainingSeats: result.remainingSeats,
     });
   } catch (error: any) {

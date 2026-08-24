@@ -43,6 +43,7 @@ import {
   Clock,
 } from 'lucide-react';
 import Link from 'next/link';
+import { sanitizeExcelCell } from '@/lib/utils/sanitize';
 
 interface AdminDashboardProps {
   initialEvent: WeddingEvent;
@@ -63,7 +64,6 @@ export function AdminDashboard({
   initialWishes = [],
   initialMoments = [],
 }: AdminDashboardProps) {
-  const [mounted, setMounted] = useState(false);
   const [event, setEvent] = useState<WeddingEvent>(initialEvent);
   const [parties, setParties] = useState<Party[]>(initialParties);
   const [stats, setStats] = useState(initialStats);
@@ -79,11 +79,6 @@ export function AdminDashboard({
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all');
   const [selectedHostFilter, setSelectedHostFilter] = useState<string>('all');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
-
-  // Admin PIN Protection State
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
-  const [adminPinInput, setAdminPinInput] = useState<string>('');
-  const [adminPinError, setAdminPinError] = useState<string | null>(null);
 
   // Guide helper state
   const [showGuide, setShowGuide] = useState(false);
@@ -177,13 +172,8 @@ export function AdminDashboard({
   };
 
   useEffect(() => {
-    setMounted(true);
     if (typeof window !== 'undefined') {
       setOriginUrl(window.location.origin);
-      const savedAuth = sessionStorage.getItem(`weddingpass_admin_auth_${event.id}`);
-      if (savedAuth === 'true') {
-        setIsAdminAuthenticated(true);
-      }
       const params = new URLSearchParams(window.location.search);
       const hostParam = params.get('host');
       if (hostParam) {
@@ -195,23 +185,16 @@ export function AdminDashboard({
     }
   }, [event.id]);
 
-  const handleAdminPinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const correctPin = event.gate_pin?.trim() || '2026';
-    if (adminPinInput.trim() === correctPin || adminPinInput.trim() === '2026') {
-      setIsAdminAuthenticated(true);
-      sessionStorage.setItem(`weddingpass_admin_auth_${event.id}`, 'true');
-      setAdminPinError(null);
-    } else {
-      setAdminPinError('رمز المرور غير صحيح');
-      setAdminPinInput('');
+  // Locks the dashboard server-side: clears the HttpOnly admin session cookie,
+  // then returns to the login screen. No client-side auth state is trusted.
+  const handleLockDashboard = async () => {
+    try {
+      await fetch('/api/admin/auth', { method: 'DELETE', credentials: 'include' });
+    } catch (err) {
+      console.error('Lock dashboard error:', err);
+    } finally {
+      window.location.href = '/admin/login';
     }
-  };
-
-  const handleAdminLogout = () => {
-    sessionStorage.removeItem(`weddingpass_admin_auth_${event.id}`);
-    setIsAdminAuthenticated(false);
-    setAdminPinInput('');
   };
 
   const refreshData = async () => {
@@ -560,12 +543,8 @@ ${inviteUrl}
     }
   };
 
-  const sanitizeExcelCell = (val: any) => {
-    if (typeof val === 'string' && /^[=+@-]/i.test(val.trim())) {
-      return `'${val}`;
-    }
-    return val;
-  };
+  // sanitizeExcelCell is imported from lib/utils/sanitize.ts — the single
+  // source shared with the QA suite (no local copies, no drift).
 
   const handleExportAttendanceExcel = () => {
     const exportData = filteredParties.map((p) => ({
@@ -610,58 +589,11 @@ ${inviteUrl}
     return true;
   });
 
-  // Admin PIN Protection Lock Screen
-  if (mounted && !isAdminAuthenticated) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
-        <form
-          onSubmit={handleAdminPinSubmit}
-          className="w-full max-w-sm bg-slate-900/90 backdrop-blur-2xl border-2 border-amber-500/30 rounded-3xl p-7 text-center shadow-2xl space-y-4 animate-fadeIn"
-        >
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
-            <Lock className="w-7 h-7" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold font-royal-heading gold-gradient-text">لوحة الإدارة المشفرة</h2>
-            <p className="text-xs text-slate-400 mt-1">
-              أدخل رمز المرور الإداري (PIN) للوصول لقائمة الضيوف وإعدادات الحفل
-            </p>
-          </div>
-
-          {adminPinError && (
-            <div className="p-2 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs font-bold">
-              {adminPinError}
-            </div>
-          )}
-
-          <input
-            type="password"
-            maxLength={8}
-            value={adminPinInput}
-            onChange={(e) => setAdminPinInput(e.target.value)}
-            placeholder="••••"
-            className="w-full text-center tracking-[0.5em] text-2xl font-mono bg-slate-950 border border-slate-700 rounded-xl p-3 text-white focus:border-amber-400 focus:outline-none font-data"
-            autoFocus
-          />
-
-          <button
-            type="submit"
-            className="w-full py-3 gold-gradient-bg text-slate-950 font-bold rounded-xl text-xs shadow-md hover:brightness-110 cursor-pointer"
-          >
-            دخول لوحة التحكم 🚀
-          </button>
-
-          <p className="text-[11px] text-slate-500">
-            رمز المرور الافتراضي: <span className="font-mono text-amber-400 font-bold">2026</span> (يمكنك تغييره من الإعدادات)
-          </p>
-        </form>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 space-y-8">
       {/* Top Header Bar */}
+      {/* NOTE: This page is protected server-side (proxy + DAL). The component
+         only ever mounts with an authenticated session and verified data. */}
       <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-6 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-amber-400 mb-1">
@@ -680,7 +612,7 @@ ${inviteUrl}
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={handleAdminLogout}
+            onClick={handleLockDashboard}
             className="py-2.5 px-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             title="قفل لوحة التحكم والخروج"
           >

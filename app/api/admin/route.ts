@@ -33,6 +33,14 @@ export async function GET(req: NextRequest) {
     }
 
     const event = await getDefaultEvent();
+    // 2. Event authorization: the session's bound eventId is the only trusted
+    // source — a session must never manage data outside its own event.
+    if (adminSession.eventId && adminSession.eventId !== event.id) {
+      return NextResponse.json(
+        { success: false, code: 'FORBIDDEN_EVENT', message: 'جلسة الإدارة غير مرتبطة بهذه الفعالية' },
+        { status: 403 }
+      );
+    }
     const parties = await getAllParties(event.id);
     const stats = await getEventStats(event.id);
     const logs = await getCheckInLogs(event.id);
@@ -78,6 +86,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action } = body;
     const event = await getDefaultEvent();
+
+    // Event authorization for every mutation: the eventId bound in the signed
+    // session is authoritative; client-supplied event ids are never trusted.
+    if (adminSession.eventId && adminSession.eventId !== event.id) {
+      return NextResponse.json(
+        { success: false, code: 'FORBIDDEN_EVENT', message: 'جلسة الإدارة غير مرتبطة بهذه الفعالية' },
+        { status: 403 }
+      );
+    }
 
     if (action === 'toggle_moment_approval') {
       const { momentId, isApproved } = body;

@@ -1,9 +1,16 @@
 import crypto from 'node:crypto';
 import { normalizeSaudiPhone } from '../lib/utils/phone.ts';
 import { constantTimeCompare, generateInvitationToken, generateEntryPassToken, hashToken } from '../lib/crypto/tokens.ts';
+import { sha256Hex, fixedTimeEqualHex } from '../lib/crypto/clientHash.ts';
 import { checkRateLimit } from '../lib/security/rateLimiter.ts';
 import { createGateSessionToken, verifyGateSessionToken } from '../lib/security/gateAuth.ts';
 import { createAdminSessionToken, verifyAdminSessionToken } from '../lib/security/adminAuth.ts';
+import {
+  sanitizeExcelCell,
+  sanitizeHtml,
+  escapeIcsText,
+  foldIcsLine,
+} from '../lib/utils/sanitize.ts';
 import {
   getDefaultEvent,
   getPartyByInvitationToken,
@@ -26,26 +33,9 @@ import {
 import { validateImageMagicBytes } from '../lib/security/imageValidation.ts';
 
 // ----------------------------------------------------------------------------
-// Pure helper functions under direct test
+// Pure helper functions under test are imported from lib/utils/sanitize.ts —
+// the single production source shared with the UI (no local copies, no drift).
 // ----------------------------------------------------------------------------
-
-function sanitizeExcelCell(val) {
-  if (typeof val === 'string' && /^[=+@-]/i.test(val.trim())) {
-    return `'${val}`;
-  }
-  return val;
-}
-
-function sanitizeHtml(str) {
-  if (typeof str !== 'string') return '';
-  return str.replace(/[&<>"']/g, (m) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  }[m] || m));
-}
 
 // ----------------------------------------------------------------------------
 // QA Test Runner & Assertions
@@ -235,6 +225,30 @@ async function runLiveCodeQASuite() {
   assert(validateImageMagicBytes(webpHeader) === true, 'Identifies valid WebP image header');
   assert(validateImageMagicBytes(jpegHeader) === true, 'Identifies valid JPEG image header');
   assert(validateImageMagicBytes(fakeFile) === false, 'Rejects script file disguised as image');
+
+  // SECTION 11: Client Offline Hash Parity (lib/crypto/clientHash.ts)
+  console.log(`\n${colors.bold}--- [11] Client Offline Hash Parity & Fixed-Time Compare ---${colors.reset}`);
+  const clientHash = await sha256Hex(passToken);
+  assert(clientHash === hashed1, 'sha256Hex (client) matches server-side hashToken output exactly');
+  assert(fixedTimeEqualHex(clientHash, hashed1) === true, 'fixedTimeEqualHex accepts identical hashes');
+  assert(fixedTimeEqualHex(clientHash, 'f'.repeat(64)) === false, 'fixedTimeEqualHex rejects different hashes');
+  assert(fixedTimeEqualHex('abc', 'abcd') === false, 'fixedTimeEqualHex rejects length mismatch safely');
+
+  // SECTION 12: RFC 5545 ICS escaping + octet-accurate line folding
+  console.log(`\n${colors.bold}--- [12] RFC 5545 Escape & Octet Folding ---${colors.reset}`);
+  assert(escapeIcsText('a;b,c\\d') === 'a\\;b\\,c\\\\d', 'Escapes ; , and backslash in correct order');
+  assert(escapeIcsText('سطر1\nسطر2') === 'سطر1\\nسطر2', 'Converts newlines to literal \\n sequence');
+  assert(escapeIcsText('emoji 🌹🌹 test') === 'emoji 🌹🌹 test', 'Preserves emoji without corruption');
+  const longArabic = 'مبارك الزواج السعيد بألف خير وبركة'.repeat(6);
+  const folded = foldIcsLine(`DESCRIPTION:${longArabic}`);
+  const foldedBytes = Buffer.byteLength(folded, 'utf8');
+  const foldedLines = folded.split('\r\n');
+  assert(foldedLines.length > 1, 'Folds long Arabic lines into continuations');
+  for (const fl of foldedLines) {
+    assert(Buffer.byteLength(fl, 'utf8') <= 75, `Every folded line stays within 75 octets (${Buffer.byteLength(fl, 'utf8')} bytes)`);
+    if (fl !== foldedLines[0]) assert(fl.startsWith(' '), 'Continuation lines start with a single space');
+  }
+  assert(foldIcsLine('SHORT') === 'SHORT', 'Short lines pass through unchanged');
 
   // Final Summary
   console.log(`\n${colors.bold}${colors.cyan}=======================================================================`);

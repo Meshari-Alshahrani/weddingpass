@@ -1,10 +1,13 @@
 import { getDefaultEvent, getAllParties } from '@/lib/db/store';
 import { ManifestView } from '@/components/ManifestView';
+import { requireAdminSession } from '@/lib/security/adminDal';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export default async function EmergencyManifestPage() {
+  await requireAdminSession();
+
   const event = await getDefaultEvent();
   const allParties = await getAllParties(event.id);
 

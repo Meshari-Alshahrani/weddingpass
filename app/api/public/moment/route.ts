@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDefaultEvent, addMoment } from '@/lib/db/store';
 import { checkDistributedRateLimit } from '@/lib/security/rateLimiter';
 import { validateImagePayload } from '@/lib/security/imageValidation';
+import { toPublicMoment } from '@/lib/presentation/publicDtos';
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,7 +67,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      moment,
+      // DTO allow-list only: the raw DB row (incl. uploader_phone) never
+      // crosses a public API boundary (v6.0.0 boundary hardening).
+      moment: toPublicMoment(moment),
       message: 'تم استلام الصورة بنجاح وستظهر في ألبوم الحفل بعد اعتماد المشرف 📸',
     });
   } catch (error: any) {

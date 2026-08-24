@@ -130,7 +130,8 @@ export async function executeCheckIn(
   checkinType: 'QR_SCAN' | 'MANUAL_SEARCH' = 'QR_SCAN',
   overrideCount?: number,
   gateSection: 'men' | 'women' | 'general' = 'men',
-  forceAdmitCrossSection: boolean = false
+  forceAdmitCrossSection: boolean = false,
+  reconciliation?: { queueId?: string | null; deviceMetadata?: Record<string, any> | null }
 ): Promise<CheckInRPCResponse> {
   return getRepository().executeCheckIn(
     eventId,
@@ -140,7 +141,8 @@ export async function executeCheckIn(
     checkinType,
     overrideCount,
     gateSection,
-    forceAdmitCrossSection
+    forceAdmitCrossSection,
+    reconciliation
   );
 }
 

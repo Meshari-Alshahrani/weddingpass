@@ -50,7 +50,16 @@ export type PublicInvitationParty = Pick<
   | 'notes'
 >;
 
-export type PublicEntryPass = Pick<EntryPass, 'id' | 'raw_pass_token'>;
+/**
+ * The issued entry credential. `raw_pass_token` is a BEARER CREDENTIAL —
+ * whoever holds it can enter the venue. It is delivered through exactly two
+ * authorized channels (pinned by tests):
+ *   1. Issuance: the RSVP / group-registration response that just created it.
+ *   2. Authorized retrieval: GET /i/[token] where possession of the secret
+ *      invitation link is itself the credential of equal trust (ADR-034).
+ * It must never appear in admin payloads, logs, caches, errors, or health.
+ */
+export type GuestEntryPassCredential = Pick<EntryPass, 'id' | 'raw_pass_token'>;
 
 export type PublicGroupInvite = Pick<
   GroupInviteLink,
@@ -98,7 +107,7 @@ export function toPublicInvitationParty(party: Party): PublicInvitationParty {
   };
 }
 
-export function toPublicEntryPass(entryPass?: EntryPass): PublicEntryPass | undefined {
+export function toGuestEntryPassCredential(entryPass?: EntryPass): GuestEntryPassCredential | undefined {
   if (!entryPass) return undefined;
   return { id: entryPass.id, raw_pass_token: entryPass.raw_pass_token };
 }

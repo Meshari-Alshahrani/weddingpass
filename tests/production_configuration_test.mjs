@@ -27,10 +27,28 @@ for (const key of [
   'GATE_SESSION_SECRET',
   'ADMIN_SECRET',
   'SUPERVISOR_PIN',
+  'ADMIN_PIN',
+  'CSP_MODE',
   'RATE_LIMITER_MODE',
 ]) {
   assert(envExample.includes(key), `.env.example must document ${key}`);
 }
+
+// Secret separation guard (ADR-032): the admin dashboard credential must never
+// equal the gate or supervisor credentials, and the legacy '2026' default is
+// banned from any admin authentication path.
+const authRouteSource = await readFile(new URL('../app/api/admin/auth/route.ts', import.meta.url), 'utf8');
+assert(authRouteSource.includes('assertAdminPinSeparation'), 'Admin auth route must enforce ADMIN_PIN secret separation');
+assert(!authRouteSource.includes("'2026'"), 'Admin auth route must not contain the legacy 2026 PIN');
+
+const dashboardSource = await readFile(new URL('../components/AdminDashboard.tsx', import.meta.url), 'utf8');
+assert(!dashboardSource.includes("=== '2026'"), 'AdminDashboard must not contain a hardcoded 2026 PIN bypass');
+assert(!dashboardSource.includes('weddingpass_admin_auth_'), 'AdminDashboard must not trust client-side sessionStorage auth');
+assert(dashboardSource.includes('/api/admin/auth'), 'AdminDashboard lock button must clear the server session');
+
+const proxySource = await readFile(new URL('../proxy.ts', import.meta.url), 'utf8');
+assert(proxySource.includes('verifyAdminSessionToken'), 'Proxy must optimistically verify the admin session cookie');
+assert(proxySource.includes('Content-Security-Policy'), 'Proxy must emit the hardened CSP header');
 
 const storeFacade = await readFile(new URL('../lib/db/store.ts', import.meta.url), 'utf8');
 assert(storeFacade.includes("import { getRepository }"), 'store facade must delegate to the repository composition root');

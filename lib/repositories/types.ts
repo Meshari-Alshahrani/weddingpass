@@ -78,7 +78,8 @@ export interface ICheckInRepository {
     checkinType?: 'QR_SCAN' | 'MANUAL_SEARCH',
     overrideCount?: number,
     gateSection?: 'men' | 'women' | 'general',
-    forceAdmitCrossSection?: boolean
+    forceAdmitCrossSection?: boolean,
+    reconciliation?: { queueId?: string | null; deviceMetadata?: Record<string, any> | null }
   ): Promise<CheckInRPCResponse>;
   getCheckInLogs(eventId: string): Promise<CheckInLog[]>;
   getActivePassesForOfflineCache(eventId: string): Promise<Array<{

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { token, passToken, checkinType, overrideCount, forceCrossSection } = body;
+    const { token, passToken, checkinType, overrideCount, forceCrossSection, queueId, deviceMetadata } = body;
 
     const rawToken = token || passToken;
     if (!rawToken || typeof rawToken !== 'string') {
@@ -37,6 +37,14 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Offline reconciliation idempotency key (ADR-030). Optional; when present
+    // the atomic RPC replays the original terminal verdict for duplicate sends.
+    const safeQueueId = typeof queueId === 'string' && queueId.length <= 64 ? queueId : null;
+    const safeMetadata =
+      deviceMetadata && typeof deviceMetadata === 'object' && !Array.isArray(deviceMetadata)
+        ? JSON.parse(JSON.stringify(deviceMetadata).slice(0, 2000))
+        : null;
 
     // 2. Derive Operator & Station STRICTLY from Verified Server Session
     const station = session.stationName;
@@ -67,7 +75,8 @@ export async function POST(req: NextRequest) {
       type,
       overrideCount,
       section,
-      isOverrideRequested
+      isOverrideRequested,
+      { queueId: safeQueueId, deviceMetadata: safeMetadata }
     );
 
     return NextResponse.json(result);

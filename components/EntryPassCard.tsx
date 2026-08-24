@@ -16,6 +16,7 @@ import {
   Shield,
   Armchair,
   CameraOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { toPng, toBlob } from 'html-to-image';
 
@@ -206,20 +207,35 @@ export function EntryPassCard({
 
         {/* High-Resolution QR Code */}
         <div className="bg-white rounded-2xl p-5 my-3 flex flex-col items-center justify-center shadow-inner border border-amber-300/40 relative">
-          <div className="p-2 bg-white rounded-xl">
-            <QRCodeSVG
-              value={passToken}
-              size={185}
-              level="H"
-              includeMargin={false}
-              fgColor="#0F172A"
-              bgColor="#FFFFFF"
-            />
-          </div>
-          <div className="mt-2.5 flex items-center gap-1.5 text-slate-800 text-xs font-bold bg-amber-50 px-3 py-1 rounded-full border border-amber-300">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>رمز مشفر ومعتمد للبوابة</span>
-          </div>
+          {passToken ? (
+            <>
+              <div className="p-2 bg-white rounded-xl">
+                <QRCodeSVG
+                  value={passToken}
+                  size={185}
+                  level="H"
+                  includeMargin={false}
+                  fgColor="#0F172A"
+                  bgColor="#FFFFFF"
+                />
+              </div>
+              <div className="mt-2.5 flex items-center gap-1.5 text-slate-800 text-xs font-bold bg-amber-50 px-3 py-1 rounded-full border border-amber-300">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>رمز مشفر ومعتمد للبوابة</span>
+              </div>
+            </>
+          ) : (
+            /* Never fabricate a guessable placeholder token (ADR-030): a fake
+               QR would look valid at the gate and only produce NOT_FOUND. */
+            <div className="py-6 px-4 text-center text-slate-700 text-xs font-bold space-y-2">
+              <AlertTriangle className="w-8 h-8 mx-auto text-amber-600" />
+              <p>بطاقة الدخول غير مكتملة بعد</p>
+              <p className="font-normal text-[11px] text-slate-500 leading-relaxed">
+                أكّد حضورك من هذه الصفحة، أو استخدم رابط الدعوة الأصلي على جهازك
+                لاستعراض بطاقتك.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Women Section Etiquette Reminder */}

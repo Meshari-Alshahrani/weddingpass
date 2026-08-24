@@ -300,6 +300,10 @@ export class MockRepository implements
     needsWheelchair?: boolean
   ): Promise<{ success: boolean; entryPass?: EntryPass; message: string }> {
     const db = getDatabaseStore();
+    // Runtime parity with submit_party_rsvp_atomic allow-list (migration 007).
+    if (status !== 'confirmed' && status !== 'declined') {
+      return { success: false, message: 'حالة تأكيد الحضور غير صالحة' };
+    }
     const party = db.parties.get(partyId);
     if (!party) return { success: false, message: 'لم يتم العثور على الدعوة' };
 
@@ -513,16 +517,17 @@ export class MockRepository implements
     const normalizedPhone = normalizeSaudiPhone(guestPhone);
     if (!normalizedPhone) return { success: false, code: 'INVALID_PHONE', message: 'يرجى إدخال رقم جوال صحيح' };
 
-    // Idempotency: Check if already registered
+    // Duplicate registration (ADR-030 parity with the atomic RPC):
+    // NO pass rotation and NO raw token is returned — knowing a phone number
+    // must never invalidate or hand over an existing guest's credential.
     for (const p of Array.from(db.parties.values())) {
       if (p.event_id === event.id && p.primary_phone === normalizedPhone && p.group_link_id === group.id) {
-        let pass = db.entryPasses.get(p.id);
         return {
           success: true,
           code: 'ALREADY_REGISTERED',
-          message: `أهلاً بك مجدداً يا ${p.party_name}! لقد تم تأكيد حضورك مسبقاً.`,
+          message: `أهلاً بك مجدداً يا ${p.party_name}! تم تسجيل هذا الرقم مسبقاً في هذه المجموعة — استخدم رابط الدعوة الأصلي لاستعراض بطاقة دخولك 🌹`,
           party: p,
-          entryPass: pass,
+          entryPass: undefined,
         };
       }
     }
@@ -613,7 +618,8 @@ export class MockRepository implements
     checkinType: 'QR_SCAN' | 'MANUAL_SEARCH' = 'QR_SCAN',
     overrideCount?: number,
     gateSection: 'men' | 'women' | 'general' = 'men',
-    forceAdmitCrossSection: boolean = false
+    forceAdmitCrossSection: boolean = false,
+    reconciliation?: { queueId?: string | null; deviceMetadata?: Record<string, any> | null }
   ): Promise<CheckInRPCResponse> {
     const db = getDatabaseStore();
     const trimmed = rawPassToken.trim();
@@ -815,7 +821,7 @@ export class MockRepository implements
     return db.wishes.filter((w) => w.event_id === eventId && (!onlyApproved || w.is_approved));
   }
 
-  async addWish(eventId: string, partyName: string, message: string, partyId?: string, isApproved: boolean = true): Promise<Wish> {
+  async addWish(eventId: string, partyName: string, message: string, partyId?: string, isApproved: boolean = false): Promise<Wish> {
     const db = getDatabaseStore();
     const wish: Wish = {
       id: `wish_${Date.now()}`,

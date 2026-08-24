@@ -1,74 +1,31 @@
-import crypto from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { constantTimeCompare } from '../crypto/tokens.ts';
 import { isSupabaseConfigured, supabaseAdmin } from '../db/supabase.ts';
+import {
+  createAdminSessionToken,
+  getAdminSecret,
+  getAdminSessionCookieName,
+  verifyAdminSessionToken,
+} from './adminSession.ts';
+import type { AdminRole, AdminSessionPayload } from './adminSession.ts';
 
-export interface AdminSessionPayload {
-  adminId: string;
-  role: 'owner' | 'organizer' | 'superadmin';
-  eventId?: string;
-  expiresAt: number;
-}
-
-function getAdminSecret(): string {
-  const secret = process.env.ADMIN_SECRET;
-  if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('FATAL SECURITY ERROR: ADMIN_SECRET environment variable is missing in production!');
-    }
-    return 'dev_admin_hmac_secret_weddingpass_2026_hardened';
-  }
-  return secret;
-}
+// Pure token primitives live in ./adminSession.ts so proxy.ts and Server
+// Components can import them without pulling the database client. They are
+// re-exported here for backward compatibility with existing call sites/tests.
+export { createAdminSessionToken, verifyAdminSessionToken, getAdminSecret, getAdminSessionCookieName };
+export type { AdminSessionPayload, AdminRole };
 
 /**
- * Creates a signed HMAC Admin Session Token
- */
-export function createAdminSessionToken(payload: AdminSessionPayload): string {
-  const secret = getAdminSecret();
-  const data = JSON.stringify(payload);
-  const base64Data = Buffer.from(data, 'utf-8').toString('base64url');
-  const hmac = crypto.createHmac('sha256', secret).update(base64Data).digest('base64url');
-  return `${base64Data}.${hmac}`;
-}
-
-/**
- * Verifies an Admin Session Token
- */
-export function verifyAdminSessionToken(token: string): AdminSessionPayload | null {
-  try {
-    if (!token || typeof token !== 'string' || !token.includes('.')) return null;
-
-    const secret = getAdminSecret();
-    const parts = token.split('.');
-    if (parts.length !== 2) return null;
-
-    const [base64Data, providedHmac] = parts;
-    const expectedHmac = crypto.createHmac('sha256', secret).update(base64Data).digest('base64url');
-
-    if (!constantTimeCompare(providedHmac, expectedHmac)) {
-      return null;
-    }
-
-    const jsonStr = Buffer.from(base64Data, 'base64url').toString('utf-8');
-    const payload: AdminSessionPayload = JSON.parse(jsonStr);
-
-    if (Date.now() > payload.expiresAt) {
-      return null; // Expired
-    }
-
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Verifies Admin Authorization from NextRequest across Supabase Auth, Cookie, or Headers
+ * Verifies Admin Authorization from NextRequest across the HttpOnly session
+ * cookie, Bearer tokens, Supabase Auth JWTs, or a strict master key.
+ *
+ * There is NO automatic development bypass: local development either opts in
+ * explicitly via WEDDINGPASS_ALLOW_MOCK=true or authenticates through
+ * /api/admin/auth like production does.
  */
 export async function getVerifiedAdminSession(req: NextRequest, targetEventOwnerId?: string): Promise<AdminSessionPayload | null> {
-  // 1. Check Admin HttpOnly Cookie
-  const cookieToken = req.cookies.get('admin_session')?.value;
+  // 1. Check Admin HttpOnly Cookie (issued by /api/admin/auth)
+  const cookieToken = req.cookies.get('admin_session')?.value || req.cookies.get('__Host-admin_session')?.value;
   if (cookieToken) {
     const verified = verifyAdminSessionToken(cookieToken);
     if (verified) return verified;
@@ -96,7 +53,7 @@ export async function getVerifiedAdminSession(req: NextRequest, targetEventOwner
           if (isAdmin) {
             return {
               adminId: user.id,
-              role: (userRole as any) || (isOwner ? 'owner' : 'organizer'),
+              role: (userRole as AdminRole) || (isOwner ? 'owner' : 'organizer'),
               expiresAt: Date.now() + 3600000,
             };
           }
@@ -120,8 +77,8 @@ export async function getVerifiedAdminSession(req: NextRequest, targetEventOwner
     }
   }
 
-  // In non-production local development mode, allow admin dashboard access if no strict flag
-  if (process.env.NODE_ENV !== 'production' && !process.env.STRICT_ADMIN_AUTH) {
+  // Explicit local-development opt-in only — never implicit, never in tests.
+  if (process.env.NODE_ENV !== 'production' && process.env.WEDDINGPASS_ALLOW_MOCK === 'true') {
     return {
       adminId: 'dev_admin',
       role: 'owner',

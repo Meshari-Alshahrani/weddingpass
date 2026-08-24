@@ -7,6 +7,46 @@
 
 ---
 
+### 🔹 [v6.0.0] - 2026-08-24 (Server-Side Admin Auth, Provisional Offline & Registration Integrity)
+
+إصدار التحصين والسلامة الكبرى: إغلاق أخطر ثغرتين (لوحة إدارة مكشوفة، أوفلاين غير موثوق) ومواءمة قاعدة البيانات مع منطق الأعمال على مستوى الـschema.
+
+* **مصادقة الإدارة Server-Side (P0 — ADR-029/032):**
+  - حماية حقيقية لـ`/admin` عبر DAL‏ (`requireAdminSession`) تسبق أي استعلام؛ بيانات الضيوف لم تعد تصل إلى RSC payload بدون جلسة موثقة.
+  - مسار `/api/admin/auth` جديد: ‏`ADMIN_PIN` env مستقل وإلزامي بالإنتاج (مع guard يمنع تطابقه مع gate/supervisor)، كوكي `__Host-admin_session` ‏HttpOnly/Secure/Strict/4h دون توكن في JSON، وDELETE للخروج.
+  - `proxy.ts` (Middleware الجديد في Next 16): فحص تفاؤلي مبكر + إعادة توجيه؛ الحماية الفعلية تبقى في الـDAL وكل handler.
+  - تفكيك القفل الوهمي: حذف شاشة PIN العميلة، وsessionStorage، **والباكدور `'2026'`** من AdminDashboard.
+  - ربط الجلسة بالفعالية: كل عملية في `/api/admin` تتحقق `session.eventId === event.id`.
+  - إغلاق الباب التلقائي التطويري: لا admin ضمنياً إلا مع `WEDDINGPASS_ALLOW_MOCK=true`.
+
+* **الأوفلاين Provisional Admission (P0 — ADR-030):**
+  - إصلاح مطابقة الأوفلاين المكسورة سابقاً: هاش SHA-256 محلي عبر Web Crypto يقارن ضد كاش البوابات (كانت المقارنة السابقة مستحيلة رياضياً).
+  - نموذج صادق: `LOCAL_ADMISSION` «دخول مؤقت بانتظار المزامنة» بدل ادعاء تحقق نهائي؛ localStorage ليس مصدر حقيقة.
+  - طابور مزامنة بمعرّف فريد `queueId` (idempotency key) + `deviceId/sequenceNo/queuedAt`؛ الحذف فقط عند حكم نهائي من السيرفر، والتعارضات (`ALREADY_CHECKED_IN` من بوابة أخرى) تظهر كـ⚠️ لا ✅.
+  - `process_secure_checkin` يعيد النتيجة الأصلية الكاملة عند إعادة الإرسال بنفس queueId (الفهرس الفريد الجزئي حاجز سباق فقط).
+
+* **سلامة التسجيل وقاعدة البيانات (P0/D — ADR-030/031) عبر migration ‏`007_registration_integrity.sql`:**
+  - `ALREADY_REGISTERED` بدون أي تدوير أو إبطال للبطاقة القائمة (منع DoS بإبطال QR ضيف شرعي برقم جواله).
+  - Clamp مقاعد الضيف بـ`max_seats_per_guest` داخل الـRPC (كان موجوداً في الوهمي فقط!).
+  - فهرس جزئي UNIQUE ‏`(event_id, group_link_id, primary_phone)` + CHECKs للأعداد و`confirmed<=allowed` وتنسيق الرقم المطبع `^9665\d{8}$` — جميعها بنمط **فحص مسبق ثم ABORT بتقرير تشخيصي** بدل dedupe صامت.
+  - DROP الصريح لتوقيع الدالة الثماني قبل التعريف العشري (منع overload يتيمة مكشوفة).
+  - تهاني تسجيل القروبات والحجر الصحي: `wishes.is_approved` افتراضاً `false` (اتساق ADR-005).
+  - `search_parties` جديدة: RPC معاملاتي ‏SECURITY INVOKER بتهريب LIKE يحل محل تجميع `.or()` النصي (إغلاق حقن فلاتر PostgREST) مع دعم الصيغتين المحلية/الدولية للجوال.
+
+* **حدود البيانات والاعتماد (ADR-034):**
+  - إعادة تسمية `GuestEntryPassCredential`: التوكن الخام bearer credential يمر عبر قناتين موثقتين فقط (الإصدار، والاسترجاع بحيازة رابط الدعوة) ويُحظر في admin/logs/cache/errors.
+  - `/api/public/moment` يعيد DTO بلا `uploader_phone`؛ حذف QR fallback القابل للتخمين `wp_pass_${party.id}` واستبداله بحالة «بطاقة غير مكتملة».
+
+* **Hardened CSP (ADR-033):** nonce + strict-dynamic عبر proxy مع `CSP_MODE=off|report-only|enforce` (الافتراضي report-only للانتقال الآمن)، واستثناء موثق لصفحة stress-test الثابتة. ترحيل الخطوط إلى `next/font/google` (استضافة ذاتية — لا اعتماد خارجي يوم الحفل).
+
+* **تنظيف التشفير:** حذف fallbacks الضعيفة (`Math.random` وهاش 32-bit المزيّف) لصالح رمي أخطاء صريحة؛ `fixedTimeEqualHex` باسم صادق بلا ادعاء timing-guarantee بالمتصفح.
+
+* **الاختبارات والتوثيق:** ‏qa_runner ‏60 فحصاً (+توازي هاش العميل/الخادم، ICS octets)، حارس `database_integrity_test` جديد داخل npm test، توسيع boundary guards (ترتيب DAL-before-query، حظر '2026'، DTO اللحظات)، عقود `/api/admin/auth`، ‏E2E ‏Playwright ‏(smoke ‏CSP/hydration على 5 مسارات + دورة QR كاملة حتى ALREADY_CHECKED_IN)، توحيد sanitize/ICS/FALLBACK_EVENT في مصادر واحدة، وحذف `qa_test_suite.ts` اليتيم.
+
+> متطلبات النشر: تطبيق migration 007 (يفشل عمداً مع تقرير إن وُجدت بيانات مكررة/غير مطبعة تتطلب قراراً بشرياً)، ضبط `ADMIN_PIN`، ثم `npm run test:supabase`، ولاحقاً قلب `CSP_MODE=enforce` بعد نجاح E2E. البوابة الأخيرة: عرض تشغيلي كامل على staging (500–1000 ضيف وجهازا بوابة مع قطع اتصال مقصود).
+
+---
+
 ### 🔹 [v5.9.4] - 2026-08-23 (Production Fail-Closed & Deployment Verification)
 
 * **Fail-Closed فعليًا:** حظر `MockRepository` في الإنتاج عند غياب URL أو service-role key الخاصين بـSupabase، وحصره على الاختبارات أو تطوير محلي صريح عبر `WEDDINGPASS_ALLOW_MOCK=true`.
@@ -253,6 +293,30 @@
 ### ADR-028: حظر الإدخال المباشر في RLS وفحص البايتات السحرية للصور
 * **القرار:** إزالة سياسات `Public insert` في Supabase لـ `wishes` و `moments`، وفرض المرور عبر Next.js API مع فحص البايتات الثنائية (Magic Bytes) للصور المرفوعة.
 * **السبب:** منع إغراق قاعدة البيانات (DDoS) وتجاوز الحجر الصحي، وصد هجمات رفع الملفات التنفيذية أو السكربتات الملغمة.
+
+### ADR-029: مصادقة لوحة الإدارة على الخادم (DAL + Proxy Optimistic)
+* **القرار:** حماية `/admin/*` بجلسة HMAC موقعة في كوكي `__Host-admin_session` ‏(HttpOnly/Secure/Strict) تُصدر من `/api/admin/auth`؛ فحص تفاؤلي في `proxy.ts` للتحويل السريع فقط، بينما `requireAdminSession()` في الـDAL يسبق أي استعلام، وكل handler في `/api/admin` يتحقق بنفسه ويطابق `session.eventId` مع الفعالية المُعدَّل عليها. لا علاقة لحماية الصفحة بحماية الـAPI.
+* **السبب:** القفل العميلي السابق كان شكلياً — كامل بيانات الضيوف كانت تصل RSC payload لأي زائر. نمط DAL هو التوجيه الرسمي لـNext.js.
+
+### ADR-030: الأوفلاين دخول مؤقت + Idempotency بالـqueueId
+* **القرار:** المسح بدون إنترنت يمنح `LOCAL_ADMISSION` موسوماً بوضوح (وليس SUCCESS)، ويُصفّ بعنصر طابور يحمل queueId UUID + deviceId/sequenceNo/queuedAt؛ الـRPC يعيد النتيجة النهائية الأصلية حرفياً عند إعادة الإرسال، والحذف من الطابور فقط عند حكم نهائي، والتعارض يُعرض كتحذير. مطابقة الأوفلاين عبر هاش SHA-256 محلي (Web Crypto).
+* **السبب:** localStorage قابل للتلاعب ولا يعلم بمسحات بوابات أخرى أثناء الانقطاع؛ ادعاء «تحقق نهائي» محلياً غير أمين أمنياً وتشغيلياً.
+
+### ADR-031: قيود قاعدة البيانات واستثناء تجاوز المشرف
+* **القرار:** فرض Invariants على مستوى الـschema‏ (فهرس فريد جزئي للتسجيل المكرر، CHECKs للأعداد والتنسيق) بنمط «تحقق ثم ABORT بتقرير» — إصلاح البيانات قرار بشري لا ترحيلة. `actual_checked_in_count > confirmed_count` مسموح عمداً (تجاوز المشرف لعدّ الوجبات) فلا يقيد.
+* **السبب:** كل invariant يمكن فرضه في DB يجب أن يفرض فيها؛ خطأ كود مستقبلي لا يجب أن يفسد البيانات، واختيار «السجل الصحيح» ليس قرار schema.
+
+### ADR-032: ADMIN_PIN مستقل دون تجزئة KDF
+* **القرار:** رمز لوحة الإدارة متغير بيئة مستقل إلزامي بالإنتاج (≥16 حرفاً عشوائياً) مع guard يمنع تطابقه مع gate/supervisor PINs، ومقارنة constant-time. لم تُعتمد تجزئة KDF للـPIN لأن ملف البيانات يضم أصلاً `SUPABASE_SECRET_KEY` الشامل؛ التجزئة هنا تضيف تعقيداً دون خفض سطح الهجوم materially. ترقية مستقبلية مقبولة.
+* **السبب:** فصل trust boundaries الثلاثة أهم من طول السر وحده، وبساطة مسار واحد تقلل الانحراف.
+
+### ADR-033: Hardened CSP بنون عبر Proxy مع بوابة CSP_MODE
+* **القرار:** ‏script-src ‏nonce+strict-dynamic يولدها proxy لكل طلب (تتطلب rendering ديناميكي — كل صفحاتنا الجوهرية force-dynamic أصلاً)، ‏style-src 'self' 'unsafe-inline' عملياً، والانتقال عبر `CSP_MODE=off|report-only|enforce`. استثناء موثق وحيد: /admin/stress-test الثابتة.
+* **السبب:** ‏App Router يولّد inline scripts؛ ‏'self' المجردة تكسر hydration. التسمية «Hardened» لا «Strict» صادقة حول تساهل style-src.
+
+### ADR-034: قناتا الاعتماد لـraw_pass_token وقناة الاسترجاع بحيازة الرابط
+* **القرار:** التوكن الخام credential bearer يظهر فقط في: (1) ردود الإصدار (RSVP/التسجيل) و(2) `GET /i/[token]` حيث حيازة رابط الدعوة السري 128-bit نفسها اعتماد بثقة مكافئة — مخففات history/referrer/cache قائمة أصلاً (no-store + Referrer-Policy). محظور في admin/logs/cache/errors/health، ويثبته snapshot guards. فصل الاستعادة بقناة إضافية (SMS/رابط سحري) بند ما بعد الحفل.
+* **السبب:** منع التوكن من GET الدعوة يكسر استعادة البطاقة الشائعة دون مكسب أمني (حيازة رابط الدعوة تتيح الوصول للبطاقة أصلاً بالتصميم ADR-001/002).
 ### 🔹 [v5.9.5] - 2026-08-23 (Public Data Boundary Hardening)
 
 * **منع تسريب بيانات RSC/API العامة:** إضافة طبقة DTO خادمية بقوائم سماح صريحة قبل تمرير البيانات إلى واجهات العميل أو ردود RSVP والتسجيل والاسترجاع.

@@ -9,7 +9,11 @@ export type ScanResult =
   | 'NOT_FOUND'
   | 'DECLINED'
   | 'MANUAL_OVERRIDE'
-  | 'CROSS_SECTION_WARNING';
+  | 'CROSS_SECTION_WARNING'
+  // Client-only provisional states for offline gate operation.
+  // They never reach check_in_logs.scan_result (server CHECK constraint).
+  | 'LOCAL_ADMISSION'
+  | 'RECONCILE_CONFLICT';
 export type SectionType = 'men' | 'women' | 'vip' | 'groom_family' | 'bride_family' | 'general';
 export type GroupLimitMode = 'unlimited' | 'warning' | 'strict';
 export type HostRole = 'العريس' | 'والد العريس' | 'والد العروس' | 'قسم النساء' | string;
@@ -163,4 +167,6 @@ export interface CheckInRPCResponse {
   is_cross_section_warning?: boolean;
   check_in_time?: string;
   first_check_in_at?: string;
+  /** True when admission was granted locally while offline (provisional, pending reconciliation). */
+  is_provisional?: boolean;
 }

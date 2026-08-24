@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { CheckInRPCResponse, CheckInType } from '@/types/database';
 import type { PublicGateEvent } from '@/lib/presentation/publicDtos';
+import { fixedTimeEqualHex, sha256Hex } from '@/lib/crypto/clientHash';
 import {
   ShieldCheck,
   AlertTriangle,
@@ -29,21 +30,45 @@ interface OfflinePassRecord {
   partyId: string;
   partyName: string;
   passTokenHash: string;
-  rawPassToken?: string;
   confirmedCount: number;
   section: string;
   tableNumber?: string | null;
   hostName?: string;
+  isVip?: boolean;
   needsWheelchair?: boolean;
   isCheckedIn: boolean;
 }
 
 interface OfflineQueuedCheckIn {
+  /** Idempotency key (UUID): the server returns the original terminal result on retry. */
+  queueId: string;
+  deviceId: string;
+  sequenceNo: number;
   rawPassToken: string;
-  timestamp: string;
+  queuedAt: string;
   stationName: string;
   operatorName: string;
   checkinType: CheckInType;
+}
+
+/** Terminal server verdicts that allow removing an item from the offline queue. */
+const TERMINAL_CHECKIN_CODES = new Set<string>([
+  'SUCCESS',
+  'ALREADY_CHECKED_IN',
+  'REVOKED',
+  'NOT_FOUND',
+  'DECLINED',
+  'CROSS_SECTION_WARNING',
+]);
+
+function getGateDeviceId(): string {
+  const KEY = 'weddingpass_gate_device_id';
+  let id = localStorage.getItem(KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(KEY, id);
+  }
+  return id;
 }
 
 export function GateScanner({ initialEvent }: GateScannerProps) {
@@ -368,7 +393,7 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
 
         const data: CheckInRPCResponse = await res.json();
         setLastResult(data);
-        playChirp(data.success, data.is_vip);
+        playChirp(data.success && !data.is_provisional, data.is_vip);
 
         if (data.success && data.party_name) {
           if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -388,19 +413,41 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
           }, 3500);
         }
       } catch (err: any) {
-        handleOfflineVerification(trimmed, type, forceCrossSection, overrideCount);
+        await handleOfflineVerification(trimmed, type, forceCrossSection, overrideCount);
       } finally {
         setLoading(false);
       }
     } else {
-      handleOfflineVerification(trimmed, type, forceCrossSection, overrideCount);
+      await handleOfflineVerification(trimmed, type, forceCrossSection, overrideCount);
       setLoading(false);
     }
   };
 
-  const handleOfflineVerification = (trimmed: string, type: CheckInType, forceCrossSection: boolean, overrideCount?: number) => {
+  /**
+   * OFFLINE = PROVISIONAL ADMISSION (ADR-030).
+   *
+   * The local cache is NOT a source of truth: it cannot know about scans that
+   * happened at other gates while disconnected. A local match therefore grants
+   * a clearly-labelled provisional admission (LOCAL_ADMISSION) which is queued
+   * with an idempotency key (queueId) and reconciled by the server later.
+   */
+  const handleOfflineVerification = async (trimmed: string, type: CheckInType, forceCrossSection: boolean, overrideCount?: number) => {
+    let scannedHash: string;
+    try {
+      scannedHash = await sha256Hex(trimmed);
+    } catch {
+      const resp: CheckInRPCResponse = {
+        success: false,
+        code: 'NOT_FOUND',
+        message: 'تعذر التحقق المحلي على هذا الجهاز. يتطلب وضع عدم الاتصال متصفحاً حديثاً.',
+      };
+      setLastResult(resp);
+      playChirp(false);
+      return;
+    }
+
     const cachedPass = offlineCache.find(
-      (p) => p.rawPassToken === trimmed || p.passTokenHash.includes(trimmed)
+      (p) => fixedTimeEqualHex((p.passTokenHash || '').toLowerCase(), scannedHash.toLowerCase())
     );
 
     if (!cachedPass) {
@@ -449,45 +496,53 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
       }
     }
 
+    // Same-device replay guard only — other gates are resolved at reconciliation.
     if (cachedPass.isCheckedIn) {
       const resp: CheckInRPCResponse = {
         success: false,
         code: 'ALREADY_CHECKED_IN',
         party_name: cachedPass.partyName,
         table_number: cachedPass.tableNumber,
-        message: 'تم مسح هذه البطاقة مسبقاً في وضع عدم الاتصال!',
+        message: 'تم مسح هذه البطاقة مسبقاً على هذا الجهاز (Offline Mode)!',
       };
       setLastResult(resp);
       playChirp(false);
       return;
     }
 
-    cachedPass.isCheckedIn = true;
     const nowTime = new Date().toLocaleTimeString('ar-SA');
-    const isVip = cachedPass.section === 'vip' || cachedPass.hostName === 'والد العروس';
-
     const resp: CheckInRPCResponse = {
       success: true,
-      code: 'SUCCESS',
+      code: 'LOCAL_ADMISSION',
+      is_provisional: true,
       party_name: cachedPass.partyName,
-      admitted_count: cachedPass.confirmedCount,
+      admitted_count: overrideCount ?? cachedPass.confirmedCount,
       section: cachedPass.section,
       table_number: cachedPass.tableNumber,
       host_name: cachedPass.hostName,
-      is_vip: isVip,
-      needs_wheelchair: cachedPass.needsWheelchair,
+      is_vip: Boolean(cachedPass.isVip),
+      needs_wheelchair: Boolean(cachedPass.needsWheelchair),
       check_in_time: nowTime,
-      message: cachedPass.tableNumber
-        ? `تم التحقق بنجاح • ${cachedPass.tableNumber}`
-        : 'تم التحقق بنجاح • أهلاً وسهلاً بكم!',
+      message: '⏳ دخول مؤقت بدون إنترنت — بانتظار المزامنة لتأكيد نهائي',
     };
 
     setLastResult(resp);
-    playChirp(true, isVip);
+    playChirp(true, Boolean(cachedPass.isVip));
+
+    // Persist the provisional state so a refresh does not allow same-device replay.
+    cachedPass.isCheckedIn = true;
+    try {
+      localStorage.setItem(`weddingpass_offline_cache_${initialEvent.id}`, JSON.stringify(offlineCache));
+    } catch (e) {
+      console.warn('Failed to persist offline cache:', e);
+    }
 
     const newQueueItem: OfflineQueuedCheckIn = {
+      queueId: crypto.randomUUID(),
+      deviceId: getGateDeviceId(),
+      sequenceNo: pendingQueue.length + 1,
       rawPassToken: trimmed,
-      timestamp: new Date().toISOString(),
+      queuedAt: new Date().toISOString(),
       stationName,
       operatorName,
       checkinType: type,
@@ -498,35 +553,96 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
 
     setTimeout(() => {
       setLastResult(null);
-    }, 3000);
+    }, 4000);
   };
 
+  /**
+   * Reconciles the offline queue with the server (ADR-030).
+   *
+   * Rules:
+   * - Every item carries a queueId (idempotency key): retries return the
+   *   original terminal verdict instead of double-charging a guest.
+   * - An item is removed from the queue ONLY on a terminal server verdict.
+   * - Network failures keep the item queued for the next attempt.
+   * - ALREADY_CHECKED_IN at another gate surfaces as an explicit conflict.
+   */
   const handleSyncPendingQueue = async () => {
     if (pendingQueue.length === 0) return;
     setSyncingQueue(true);
 
+    let syncedCount = 0;
+    const conflicts: CheckInRPCResponse[] = [];
+    const remaining: OfflineQueuedCheckIn[] = [];
+
     try {
-      const queueToProcess = [...pendingQueue];
-      for (const item of queueToProcess) {
-        await fetch('/api/checkin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            token: item.rawPassToken,
-            stationName: item.stationName,
-            operatorName: item.operatorName,
-            checkinType: item.checkinType,
-            gateSection,
-            forceCrossSection: true,
-          }),
-        });
+      for (const item of [...pendingQueue]) {
+        try {
+          const res = await fetch('/api/checkin', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              token: item.rawPassToken,
+              checkinType: item.checkinType,
+              queueId: item.queueId,
+              deviceMetadata: {
+                deviceId: item.deviceId,
+                sequenceNo: item.sequenceNo,
+                queuedAt: item.queuedAt,
+                stationName: item.stationName,
+                operatorName: item.operatorName,
+              },
+            }),
+          });
+
+          if (!res.ok) {
+            remaining.push(item);
+            continue;
+          }
+
+          const data: CheckInRPCResponse = await res.json();
+
+          if (TERMINAL_CHECKIN_CODES.has(data.code)) {
+            syncedCount++;
+            if (data.code === 'ALREADY_CHECKED_IN') {
+              conflicts.push({
+                ...data,
+                code: 'RECONCILE_CONFLICT',
+                message: data.message || 'هذه البطاقة سبق استخدامها في بوابة أخرى',
+              });
+            }
+          } else {
+            // Non-terminal response — retry later.
+            remaining.push(item);
+          }
+        } catch (itemErr) {
+          console.warn('Queue item sync failed, keeping queued:', itemErr);
+          remaining.push(item);
+        }
       }
 
-      setPendingQueue([]);
-      localStorage.removeItem(`weddingpass_offline_queue_${initialEvent.id}`);
+      setPendingQueue(remaining);
+      localStorage.setItem(`weddingpass_offline_queue_${initialEvent.id}`, JSON.stringify(remaining));
+
+      if (conflicts.length > 0) {
+        setLastResult({
+          success: false,
+          code: 'RECONCILE_CONFLICT',
+          party_name: conflicts[0].party_name,
+          message: `⚠️ تعارض مزامنة (${conflicts.length}): بطاقة دخلت مسبقاً من بوابة أخرى — راجع لوحة المنظم.`,
+        });
+        playChirp(false);
+        setTimeout(() => setLastResult(null), 6000);
+      } else if (syncedCount > 0 && remaining.length === 0) {
+        setLastResult({
+          success: true,
+          code: 'SUCCESS',
+          message: `✅ تمت مزامنة ${syncedCount} عملية دخول مؤقتة بنجاح`,
+        });
+        setTimeout(() => setLastResult(null), 4000);
+      }
+
       await fetchOfflineCache();
-    } catch (err) {
-      console.error('Queue sync failed:', err);
     } finally {
       setSyncingQueue(false);
     }
@@ -706,7 +822,11 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
         {lastResult && (
           <div
             className={`p-4 rounded-2xl border text-right space-y-2.5 animate-fadeIn ${
-              lastResult.code === 'SUCCESS'
+              lastResult.code === 'LOCAL_ADMISSION'
+                ? 'bg-yellow-950/80 border-yellow-500/60 text-yellow-100 shadow-[0_0_30px_rgba(234,179,8,0.35)]'
+                : lastResult.code === 'RECONCILE_CONFLICT'
+                ? 'bg-orange-950/80 border-orange-500/60 text-orange-100 shadow-[0_0_30px_rgba(249,115,22,0.4)]'
+                : lastResult.code === 'SUCCESS'
                 ? lastResult.is_vip
                   ? 'bg-amber-950/90 border-amber-400 text-amber-100 shadow-[0_0_35px_rgba(212,175,55,0.5)]'
                   : 'bg-emerald-950/70 border-emerald-500/50 text-emerald-100 shadow-[0_0_30px_rgba(16,185,129,0.3)]'
@@ -737,6 +857,10 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
               <div className="flex items-center gap-2">
                 {lastResult.code === 'SUCCESS' ? (
                   <ShieldCheck className="w-6 h-6 text-emerald-400" />
+                ) : lastResult.code === 'LOCAL_ADMISSION' ? (
+                  <CloudUpload className="w-6 h-6 text-yellow-400" />
+                ) : lastResult.code === 'RECONCILE_CONFLICT' ? (
+                  <AlertTriangle className="w-6 h-6 text-orange-400" />
                 ) : lastResult.code === 'CROSS_SECTION_WARNING' ? (
                   <AlertTriangle className="w-6 h-6 text-amber-400" />
                 ) : (
@@ -746,6 +870,10 @@ export function GateScanner({ initialEvent }: GateScannerProps) {
                   <h3 className="font-bold text-sm">
                     {lastResult.code === 'SUCCESS'
                       ? 'مصرح بالدخول ✅'
+                      : lastResult.code === 'LOCAL_ADMISSION'
+                      ? 'دخول مؤقت ⏳ (بانتظار المزامنة)'
+                      : lastResult.code === 'RECONCILE_CONFLICT'
+                      ? 'تعارض مزامنة 🔄'
                       : lastResult.code === 'CROSS_SECTION_WARNING'
                       ? 'تنبيه بوابة الأقسام ⚠️'
                       : 'مرفوض ❌'}

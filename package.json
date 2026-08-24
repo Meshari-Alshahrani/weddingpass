@@ -1,17 +1,19 @@
 {
   "name": "weddingpass",
-  "version": "5.9.4",
+  "version": "6.0.0",
   "type": "module",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "test": "NODE_ENV=test node tests/qa_runner.mjs && NODE_ENV=test node tests/concurrency_test.mjs && NODE_ENV=test node tests/http_concurrency_test.mjs && NODE_ENV=test node tests/api_routes_integration_test.mjs && NODE_ENV=test node tests/production_configuration_test.mjs && NODE_ENV=test node tests/public_data_boundary_test.mjs",
+    "test": "NODE_ENV=test node tests/qa_runner.mjs && NODE_ENV=test node tests/concurrency_test.mjs && NODE_ENV=test node tests/http_concurrency_test.mjs && NODE_ENV=test node tests/api_routes_integration_test.mjs && NODE_ENV=test node tests/production_configuration_test.mjs && NODE_ENV=test node tests/public_data_boundary_test.mjs && NODE_ENV=test node tests/database_integrity_test.mjs",
+    "test:integrity": "NODE_ENV=test node tests/database_integrity_test.mjs",
     "test:concurrency": "node tests/concurrency_test.mjs",
     "test:http": "node tests/http_concurrency_test.mjs",
     "test:api": "NODE_ENV=test node tests/api_routes_integration_test.mjs",
     "test:production-config": "NODE_ENV=test node tests/production_configuration_test.mjs",
-    "test:supabase": "RUN_SUPABASE_INTEGRATION=true NODE_ENV=production node tests/supabase_integration_test.mjs"
+    "test:supabase": "RUN_SUPABASE_INTEGRATION=true NODE_ENV=production node tests/supabase_integration_test.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
@@ -28,6 +30,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

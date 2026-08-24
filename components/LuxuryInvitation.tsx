@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import type { PublicEntryPass, PublicEvent, PublicInvitationParty } from '@/lib/presentation/publicDtos';
+import type { GuestEntryPassCredential, PublicEvent, PublicInvitationParty } from '@/lib/presentation/publicDtos';
 import { EntryPassCard } from './EntryPassCard';
 import confetti from 'canvas-confetti';
 import {
@@ -30,7 +30,7 @@ import Link from 'next/link';
 interface LuxuryInvitationProps {
   party: PublicInvitationParty;
   event: PublicEvent;
-  initialEntryPass?: PublicEntryPass;
+  initialEntryPass?: GuestEntryPassCredential;
   invitationToken: string;
 }
 
@@ -50,7 +50,7 @@ export function LuxuryInvitation({
   );
   const [wishText, setWishText] = useState<string>(party.notes || '');
   const [needsWheelchair, setNeedsWheelchair] = useState<boolean>(Boolean(party.needs_wheelchair));
-  const [entryPass, setEntryPass] = useState<PublicEntryPass | undefined>(initialEntryPass);
+  const [entryPass, setEntryPass] = useState<GuestEntryPassCredential | undefined>(initialEntryPass);
   const [loading, setLoading] = useState(false);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
 
@@ -440,7 +440,7 @@ export function LuxuryInvitation({
               confirmedCount={selectedCount}
               section={party.section}
               tableNumber={party.table_number}
-              passToken={entryPass?.raw_pass_token || initialEntryPass?.raw_pass_token || `wp_pass_${party.id}`}
+              passToken={entryPass?.raw_pass_token || initialEntryPass?.raw_pass_token || ''}
               eventGroom={event.groom_name}
               eventBride={event.bride_name}
               eventDate={event.event_date}
