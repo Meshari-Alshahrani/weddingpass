@@ -102,6 +102,7 @@ try {
     p_station_name: 'stg-gate', p_operator_name: 'tester',
     p_queue_id: `${RUN}_q1`, p_device_metadata: { deviceId: 'stg-dev' },
   });
+  assert.equal(scan1.error, null, `T3 scan1 RPC failed: ${scan1.error?.message}`);
   assert.equal(scan1.data?.code, 'SUCCESS', 'T3: first queued scan admits');
 
   // ------------------------------- T4: anti-replay on second live scan -----
@@ -109,6 +110,7 @@ try {
     p_event_id: EVENT_ID, p_pass_token_hash: passHash1,
     p_station_name: 'stg-gate', p_operator_name: 'tester', p_queue_id: null, p_device_metadata: null,
   });
+  assert.equal(scan2.error, null, `T4 scan2 RPC failed: ${scan2.error?.message}`);
   assert.equal(scan2.data?.code, 'ALREADY_CHECKED_IN', 'T4: second scan rejected');
 
   // ------------------------- T5: queue replay returns ORIGINAL verbatim ----
@@ -117,12 +119,14 @@ try {
     p_station_name: 'other-gate', p_operator_name: 'other-op',
     p_queue_id: `${RUN}_q1`, p_device_metadata: null,
   });
+  assert.equal(replay.error, null, `T5 replay RPC failed: ${replay.error?.message}`);
   assert.deepEqual(replay.data, scan1.data, 'T5: same queueId replays ORIGINAL terminal result verbatim');
 
   // ------------------------------- T6: RSVP status allow-list --------------
   const badRsvp = await supabaseAdmin.rpc('submit_party_rsvp_atomic', {
     p_party_id: partyId, p_status: 'hacked', p_attending_count: 1,
   });
+  assert.equal(badRsvp.error, null, `T6 badRsvp RPC failed: ${badRsvp.error?.message}`);
   assert.equal(badRsvp.data?.code, 'INVALID_STATUS', 'T6: invalid RSVP status rejected by RPC');
 
   console.log('✔ Real Supabase staging integration: 12 assertions passed (fixtures cleaned)');
